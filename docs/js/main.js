@@ -62,6 +62,7 @@ let fireButtonEl = null;
 let gameState = 'playing'; // 'playing' | 'ended'
 let endOverlayEl = null;
 let endScoreEl = null;
+let endTitleEl = null;
 
 // Floating combat text
 const floatingTexts = []; // { el: HTMLElement, worldPos: THREE.Vector3, age: number, duration: number }
@@ -271,12 +272,13 @@ function setupEndOverlay() {
     endOverlayEl.className = 'end-overlay';
     endOverlayEl.innerHTML = `
         <div class="panel">
-            <h2>Time’s up!</h2>
+            <h2 id="end-title">Time’s up!</h2>
             <div class="final-score">Score: <span id="end-score">0</span></div>
             <button type="button" id="restart-button">Restart</button>
         </div>
     `;
     overlay.appendChild(endOverlayEl);
+    endTitleEl = endOverlayEl.querySelector('#end-title');
     endScoreEl = endOverlayEl.querySelector('#end-score');
     const restartBtn = endOverlayEl.querySelector('#restart-button');
     restartBtn.addEventListener('click', (e) => {
@@ -285,13 +287,15 @@ function setupEndOverlay() {
     });
 }
 
-function endGame() {
+function endGame(reason) {
+    if (gameState === 'ended') return;
     gameState = 'ended';
     setTimeRemaining(0);
     if (fireButtonEl) fireButtonEl.disabled = true;
+    if (endTitleEl) endTitleEl.textContent = reason === 'win' ? 'You win!' : 'Time’s up!';
     if (endScoreEl) endScoreEl.textContent = String(score);
     if (endOverlayEl) endOverlayEl.style.display = 'flex';
-    debugLog('[SnowballBlitz] game ended', { score });
+    debugLog('[SnowballBlitz] game ended', { reason, score });
 }
 
 function resetGame() {
@@ -465,6 +469,11 @@ function destroyTarget(target) {
     targetByBodyId.delete(target.body.id);
 
     debugLog('[SnowballBlitz] target destroyed', { remaining: targets.filter(t => t.alive).length });
+
+    // Win condition: all targets destroyed before time runs out
+    if (gameState === 'playing' && targets.every(t => !t.alive)) {
+        endGame('win');
+    }
 }
 
 function worldToScreen(posWorld) {
@@ -996,7 +1005,7 @@ function animate() {
     if (gameState === 'playing') {
         timeRemainingSec -= dt;
         if (timeRemainingSec <= 0) {
-            endGame();
+            endGame('timeout');
         } else {
             // Update timer display (smooth)
             if (timerValueEl) timerValueEl.textContent = formatTimeMMSS(timeRemainingSec);
