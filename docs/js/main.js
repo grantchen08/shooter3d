@@ -252,13 +252,27 @@ function onWindowResize() {
 }
 
 function updateCameraPosition() {
-    // Calculate camera position using spherical coordinates
-    const x = player.position.x + cameraDistance * Math.sin(cameraRotationX) * Math.cos(cameraRotationY);
-    const y = player.position.y + cameraHeight + cameraDistance * Math.sin(cameraRotationY);
-    const z = player.position.z + cameraDistance * Math.cos(cameraRotationX) * Math.cos(cameraRotationY);
-    
-    camera.position.set(x, y, z);
-    camera.lookAt(player.position.x, player.position.y + cameraHeight * 0.5, player.position.z);
+    // Vector from player -> camera (orbit direction)
+    const toCamera = new THREE.Vector3(
+        Math.sin(cameraRotationX) * Math.cos(cameraRotationY),
+        Math.sin(cameraRotationY),
+        Math.cos(cameraRotationX) * Math.cos(cameraRotationY)
+    ).normalize();
+
+    // Place camera behind the player (plus height offset)
+    const camPos = player.position
+        .clone()
+        .add(new THREE.Vector3(0, cameraHeight, 0))
+        .add(toCamera.multiplyScalar(cameraDistance));
+    camera.position.copy(camPos);
+
+    // Aim forward FROM the player, opposite of the camera orbit direction
+    const aimForward = toCamera.clone().multiplyScalar(-1).normalize();
+    const aimTarget = player.position
+        .clone()
+        .add(new THREE.Vector3(0, cameraHeight * 0.5, 0))
+        .add(aimForward.multiplyScalar(12));
+    camera.lookAt(aimTarget);
 }
 
 function setupInputHandlers() {
@@ -288,10 +302,13 @@ function fireProjectile() {
         return;
     }
 
-    // Direction: camera forward vector
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    dir.normalize();
+    // Direction: aim forward (from player outward), consistent with updateCameraPosition()
+    // Note: camera orbit direction is player->camera; aim direction is the opposite.
+    const dir = new THREE.Vector3(
+        -Math.sin(cameraRotationX) * Math.cos(cameraRotationY),
+        -Math.sin(cameraRotationY),
+        -Math.cos(cameraRotationX) * Math.cos(cameraRotationY)
+    ).normalize();
 
     // Spawn position: slightly in front of and above player
     const spawnPos = player.position
@@ -302,7 +319,7 @@ function fireProjectile() {
     // Three.js mesh
     const geometry = new THREE.SphereGeometry(projectileRadius, 16, 16);
     const material = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
+        color: 0xff3b30, // bright red for visibility while prototyping
         roughness: 0.35,
         metalness: 0.05,
     });
