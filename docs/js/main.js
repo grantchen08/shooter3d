@@ -1,6 +1,6 @@
 /**
  * Snowball Blitz - Main Game File
- * Stage 6: Collisions + Piercing Logic
+ * Stage 7: Scoring + Floating Combat Text
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -47,6 +47,14 @@ const projectileMaxAgeSec = 8;
 // Platforms & targets
 const platforms = []; // { mesh: THREE.Mesh, body: CANNON.Body }
 const targets = []; // { mesh: THREE.Group, body: CANNON.Body, alive: boolean }
+
+// Score + HUD
+let score = 0;
+let scoreValueEl = null;
+const SCORE_PER_TARGET = 50;
+
+// Floating combat text
+const floatingTexts = []; // { el: HTMLElement, worldPos: THREE.Vector3, age: number, duration: number }
 
 // Collision groups
 const CG_PROJECTILE = 1;
@@ -173,6 +181,9 @@ function init() {
     // Trajectory line
     setupTrajectoryLine();
 
+    // HUD
+    setupHud();
+
     // On-screen debug line (helps when console is filtered / hidden)
     const uiOverlay = document.getElementById('ui-overlay');
     debugEl = document.createElement('div');
@@ -195,6 +206,20 @@ function init() {
     
     // Start render loop
     animate();
+}
+
+function setupHud() {
+    scoreValueEl = document.getElementById('hud-score-value');
+    setScore(0);
+}
+
+function setScore(value) {
+    score = value;
+    if (scoreValueEl) scoreValueEl.textContent = String(score);
+}
+
+function addScore(delta) {
+    setScore(score + delta);
 }
 
 function setupLighting() {
@@ -331,11 +356,68 @@ function handleProjectileContact(projectile, otherBody) {
 
 function destroyTarget(target) {
     target.alive = false;
+
+    // Spawn floating score text at target position (use mesh position; it's at platform surface)
+    spawnFloatingText(`+${SCORE_PER_TARGET}`, target.mesh.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
+    addScore(SCORE_PER_TARGET);
+
     scene.remove(target.mesh);
     world.removeBody(target.body);
     targetByBodyId.delete(target.body.id);
 
     debugLog('[SnowballBlitz] target destroyed', { remaining: targets.filter(t => t.alive).length });
+}
+
+function worldToScreen(posWorld) {
+    // Returns pixel coords relative to viewport
+    const v = posWorld.clone().project(camera);
+    const x = (v.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+    return { x, y, z: v.z };
+}
+
+function spawnFloatingText(text, worldPos) {
+    const overlay = document.getElementById('ui-overlay');
+    if (!overlay) return;
+
+    const el = document.createElement('div');
+    el.className = 'floating-text';
+    el.textContent = text;
+    overlay.appendChild(el);
+
+    floatingTexts.push({
+        el,
+        worldPos,
+        age: 0,
+        duration: 0.9,
+    });
+}
+
+function updateFloatingTexts(dt) {
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.age += dt;
+
+        const t = Math.min(ft.age / ft.duration, 1);
+        const rise = 28 * t; // pixels
+        const fade = 1 - t;
+
+        const { x, y, z } = worldToScreen(ft.worldPos);
+
+        // Hide if behind camera
+        if (z > 1) {
+            ft.el.style.opacity = '0';
+            ft.el.style.transform = 'translate(-9999px, -9999px)';
+        } else {
+            ft.el.style.opacity = String(fade);
+            ft.el.style.transform = `translate(${x}px, ${y - rise}px) translate(-50%, -50%)`;
+        }
+
+        if (ft.age >= ft.duration) {
+            ft.el.remove();
+            floatingTexts.splice(i, 1);
+        }
+    }
 }
 
 function createPlatformsAndTargets() {
@@ -805,6 +887,9 @@ function animate() {
 
     // Update predicted trajectory each frame (cheap at these point counts)
     updateTrajectoryLine();
+
+    // Update floating combat text
+    updateFloatingTexts(dt);
     
     // Render scene
     renderer.render(scene, camera);
