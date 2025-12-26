@@ -1,6 +1,6 @@
 /**
  * Snowball Blitz - Main Game File
- * Stage 7: Scoring + Floating Combat Text
+ * Stage 8: Timer + Game Loop
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -52,6 +52,16 @@ const targets = []; // { mesh: THREE.Group, body: CANNON.Body, alive: boolean }
 let score = 0;
 let scoreValueEl = null;
 const SCORE_PER_TARGET = 50;
+
+// Timer + game state
+const TIME_LIMIT_SEC = 60;
+let timeRemainingSec = TIME_LIMIT_SEC;
+let timerValueEl = null;
+let timerEl = null;
+let fireButtonEl = null;
+let gameState = 'playing'; // 'playing' | 'ended'
+let endOverlayEl = null;
+let endScoreEl = null;
 
 // Floating combat text
 const floatingTexts = []; // { el: HTMLElement, worldPos: THREE.Vector3, age: number, duration: number }
@@ -212,6 +222,13 @@ function setupHud() {
     scoreValueEl = document.getElementById('hud-score-value');
     debugLog('[SnowballBlitz] setupHud()', { foundScoreEl: !!scoreValueEl });
     setScore(0);
+
+    timerEl = document.getElementById('hud-timer');
+    timerValueEl = document.getElementById('hud-timer-value');
+    setTimeRemaining(TIME_LIMIT_SEC);
+
+    // Create end overlay UI (hidden until time runs out)
+    setupEndOverlay();
 }
 
 function setScore(value) {
@@ -228,6 +245,80 @@ function setScore(value) {
 function addScore(delta) {
     debugLog('[SnowballBlitz] addScore()', { delta, before: score, after: score + delta });
     setScore(score + delta);
+}
+
+function formatTimeMMSS(seconds) {
+    const s = Math.max(0, Math.ceil(seconds));
+    const mm = Math.floor(s / 60);
+    const ss = s % 60;
+    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+}
+
+function setTimeRemaining(seconds) {
+    timeRemainingSec = seconds;
+    if (timerValueEl) timerValueEl.textContent = formatTimeMMSS(timeRemainingSec);
+    if (timerEl) {
+        if (timeRemainingSec <= 10 && gameState === 'playing') timerEl.classList.add('hud-timer-low');
+        else timerEl.classList.remove('hud-timer-low');
+    }
+}
+
+function setupEndOverlay() {
+    const overlay = document.getElementById('ui-overlay');
+    if (!overlay) return;
+
+    endOverlayEl = document.createElement('div');
+    endOverlayEl.className = 'end-overlay';
+    endOverlayEl.innerHTML = `
+        <div class="panel">
+            <h2>Time’s up!</h2>
+            <div class="final-score">Score: <span id="end-score">0</span></div>
+            <button type="button" id="restart-button">Restart</button>
+        </div>
+    `;
+    overlay.appendChild(endOverlayEl);
+    endScoreEl = endOverlayEl.querySelector('#end-score');
+    const restartBtn = endOverlayEl.querySelector('#restart-button');
+    restartBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        resetGame();
+    });
+}
+
+function endGame() {
+    gameState = 'ended';
+    setTimeRemaining(0);
+    if (fireButtonEl) fireButtonEl.disabled = true;
+    if (endScoreEl) endScoreEl.textContent = String(score);
+    if (endOverlayEl) endOverlayEl.style.display = 'flex';
+    debugLog('[SnowballBlitz] game ended', { score });
+}
+
+function resetGame() {
+    // Remove projectiles
+    for (let i = projectiles.length - 1; i >= 0; i--) removeProjectile(i);
+
+    // Remove remaining targets
+    for (const t of targets) {
+        if (!t.alive) continue;
+        scene.remove(t.mesh);
+        world.removeBody(t.body);
+        t.alive = false;
+    }
+    targetByBodyId.clear();
+    targets.length = 0;
+
+    // Respawn targets on existing platforms
+    createTargets();
+
+    // Reset score/time/state
+    setScore(0);
+    gameState = 'playing';
+    setTimeRemaining(TIME_LIMIT_SEC);
+    if (fireButtonEl) fireButtonEl.disabled = false;
+    if (endOverlayEl) endOverlayEl.style.display = 'none';
+
+    debugLog('[SnowballBlitz] game reset');
 }
 
 function setupLighting() {
@@ -548,6 +639,7 @@ function setupFireButton() {
         debugLog('[SnowballBlitz] fire button not found');
         return;
     }
+    fireButtonEl = button;
 
     const press = (event) => {
         // Avoid triggering canvas drag/scroll; make firing feel instant.
@@ -723,6 +815,7 @@ function setupInputHandlers() {
 }
 
 function fireProjectile() {
+    if (gameState !== 'playing') return;
     if (!scene || !world || !camera || !player) {
         debugLog('[SnowballBlitz] fireProjectile() blocked - missing refs', {
             scene: !!scene,
@@ -898,6 +991,21 @@ function animate() {
 
     // Update floating combat text
     updateFloatingTexts(dt);
+
+    // Timer/game loop
+    if (gameState === 'playing') {
+        timeRemainingSec -= dt;
+        if (timeRemainingSec <= 0) {
+            endGame();
+        } else {
+            // Update timer display (smooth)
+            if (timerValueEl) timerValueEl.textContent = formatTimeMMSS(timeRemainingSec);
+            if (timerEl) {
+                if (timeRemainingSec <= 10) timerEl.classList.add('hud-timer-low');
+                else timerEl.classList.remove('hud-timer-low');
+            }
+        }
+    }
     
     // Render scene
     renderer.render(scene, camera);
