@@ -468,10 +468,12 @@ function destroyTarget(target) {
     world.removeBody(target.body);
     targetByBodyId.delete(target.body.id);
 
-    debugLog('[SnowballBlitz] target destroyed', { remaining: targets.filter(t => t.alive).length });
+    const remainingAlive = targets.reduce((n, t) => n + (t.alive ? 1 : 0), 0);
+    debugLog('[SnowballBlitz] target destroyed', { remaining: remainingAlive });
 
     // Win condition: all targets destroyed before time runs out
-    if (gameState === 'playing' && targets.every(t => !t.alive)) {
+    if (gameState === 'playing' && remainingAlive === 0) {
+        debugLog('[SnowballBlitz] win condition met (all targets destroyed)');
         endGame('win');
     }
 }
@@ -1003,6 +1005,13 @@ function animate() {
 
     // Timer/game loop
     if (gameState === 'playing') {
+        // Also check win condition here (in case anything removes targets outside destroyTarget)
+        const remainingAlive = targets.reduce((n, t) => n + (t.alive ? 1 : 0), 0);
+        if (remainingAlive === 0) {
+            debugLog('[SnowballBlitz] win condition met (loop check)');
+            endGame('win');
+        }
+
         timeRemainingSec -= dt;
         if (timeRemainingSec <= 0) {
             endGame('timeout');
