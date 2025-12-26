@@ -1,6 +1,6 @@
 /**
  * Snowball Blitz - Main Game File
- * Stage 4: On-screen Fire Button UI
+ * Stage 5: Targets (Snowmen) + Tiered Platforms
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -43,6 +43,10 @@ const projectiles = []; // { mesh: THREE.Mesh, body: CANNON.Body, age: number }
 const projectileRadius = 0.15;
 const projectileSpeed = 18; // fixed launch speed
 const projectileMaxAgeSec = 8;
+
+// Platforms & targets
+const platforms = []; // { mesh: THREE.Mesh, body: CANNON.Body }
+const targets = []; // { mesh: THREE.Group, body: CANNON.Body, alive: boolean }
 
 // Trajectory visualization
 let trajectoryLine = null;
@@ -137,6 +141,9 @@ function init() {
     
     // Setup physics world
     setupPhysics();
+
+    // Build tiered platforms + static targets
+    createPlatformsAndTargets();
     
     // Handle window resize
     window.addEventListener('resize', onWindowResize);
@@ -231,6 +238,111 @@ function setupPhysics() {
     groundBody.addShape(groundShape);
     groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
     world.addBody(groundBody);
+}
+
+function createPlatformsAndTargets() {
+    createTieredPlatforms();
+    createTargets();
+}
+
+function createTieredPlatforms() {
+    // Simple tiered "staircase" in front of the player (toward -Z)
+    const steps = [
+        { w: 12, h: 1.0, d: 6, x: 0, y: 0.5, z: -10 },
+        { w: 10, h: 1.0, d: 6, x: 0, y: 1.5, z: -18 },
+        { w: 8,  h: 1.0, d: 6, x: 0, y: 2.5, z: -26 },
+    ];
+
+    const mat = new THREE.MeshStandardMaterial({
+        color: 0xb9c2cc,
+        roughness: 0.9,
+        metalness: 0.05,
+    });
+
+    for (const s of steps) {
+        const geom = new THREE.BoxGeometry(s.w, s.h, s.d);
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.set(s.x, s.y, s.z);
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+
+        const shape = new CANNON.Box(new CANNON.Vec3(s.w / 2, s.h / 2, s.d / 2));
+        const body = new CANNON.Body({
+            mass: 0,
+            shape,
+            position: new CANNON.Vec3(s.x, s.y, s.z),
+        });
+        world.addBody(body);
+
+        platforms.push({ mesh, body });
+    }
+}
+
+function createSnowmanMesh() {
+    const group = new THREE.Group();
+
+    const snowMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.85,
+        metalness: 0.0,
+    });
+
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), snowMat);
+    body.position.set(0, 0.45, 0);
+    group.add(body);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), snowMat);
+    head.position.set(0, 0.45 + 0.28 + 0.18, 0);
+    group.add(head);
+
+    // Tiny "nose" for orientation
+    const nose = new THREE.Mesh(
+        new THREE.ConeGeometry(0.06, 0.25, 10),
+        new THREE.MeshStandardMaterial({ color: 0xff9500, roughness: 0.6 })
+    );
+    nose.rotation.x = Math.PI / 2;
+    nose.position.set(0, head.position.y, -0.28);
+    group.add(nose);
+
+    return group;
+}
+
+function createTargets() {
+    // Place static targets on platforms in simple rows
+    const placements = [
+        // step 1 (top surface is y=1.0)
+        { x: -3.0, y: 1.0, z: -10 },
+        { x:  0.0, y: 1.0, z: -10 },
+        { x:  3.0, y: 1.0, z: -10 },
+        // step 2 (top surface is y=2.0)
+        { x: -2.5, y: 2.0, z: -18 },
+        { x:  0.0, y: 2.0, z: -18 },
+        { x:  2.5, y: 2.0, z: -18 },
+        // step 3 (top surface is y=3.0)
+        { x: -2.0, y: 3.0, z: -26 },
+        { x:  0.0, y: 3.0, z: -26 },
+        { x:  2.0, y: 3.0, z: -26 },
+    ];
+
+    for (const p of placements) {
+        const mesh = createSnowmanMesh();
+        mesh.position.set(p.x, p.y, p.z);
+        scene.add(mesh);
+
+        // Physics body (static). Use a single sphere collider for now.
+        // Center sits above the platform surface.
+        const shape = new CANNON.Sphere(0.55);
+        const body = new CANNON.Body({
+            mass: 0,
+            shape,
+            position: new CANNON.Vec3(p.x, p.y + 0.55, p.z),
+        });
+        world.addBody(body);
+
+        targets.push({ mesh, body, alive: true });
+    }
+
+    debugLog('[SnowballBlitz] targets created', { count: targets.length });
 }
 
 function setupFireButton() {
