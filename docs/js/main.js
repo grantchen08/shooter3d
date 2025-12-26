@@ -1,6 +1,6 @@
 /**
  * Snowball Blitz - Main Game File
- * Stage 3: Trajectory Visualization
+ * Stage 4: On-screen Fire Button UI
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -165,6 +165,9 @@ function init() {
     debugEl.textContent = 'Debug: ready';
     uiOverlay.appendChild(debugEl);
 
+    // Fire button UI (desktop + mobile)
+    setupFireButton();
+
     debugLog('[SnowballBlitz] init() complete');
     
     // Start render loop
@@ -230,6 +233,39 @@ function setupPhysics() {
     world.addBody(groundBody);
 }
 
+function setupFireButton() {
+    const button = document.getElementById('fire-button');
+    if (!button) {
+        debugLog('[SnowballBlitz] fire button not found');
+        return;
+    }
+
+    const press = (event) => {
+        // Avoid triggering canvas drag/scroll; make firing feel instant.
+        event.preventDefault();
+        event.stopPropagation();
+        button.classList.add('pressed');
+        debugLog('[SnowballBlitz] fire button -> fireProjectile()');
+        fireProjectile();
+    };
+
+    const release = () => {
+        button.classList.remove('pressed');
+    };
+
+    // Pointer events cover mouse + touch
+    button.addEventListener('pointerdown', press);
+    button.addEventListener('pointerup', release);
+    button.addEventListener('pointercancel', release);
+    button.addEventListener('pointerleave', release);
+
+    // Keep focus off the button during rapid tapping
+    button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+    });
+}
+
 function setupTrajectoryLine() {
     const material = new THREE.LineDashedMaterial({
         color: 0xffffff,
@@ -268,13 +304,6 @@ function setupFireInputHandlers() {
             event.preventDefault();
         }
     }, { capture: true });
-
-    // Temporary: Click/tap canvas to fire (useful if keyboard focus is an issue)
-    const canvas = document.getElementById('game-canvas');
-    canvas.addEventListener('click', () => {
-        debugLog('[SnowballBlitz] canvas click -> fireProjectile()');
-        fireProjectile();
-    });
 }
 
 function onWindowResize() {

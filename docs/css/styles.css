@@ -35,6 +35,38 @@ html, body {
     z-index: 10;
 }
 
+#fire-button {
+    position: absolute;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    width: 96px;
+    height: 96px;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 59, 48, 0.95);
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    z-index: 50;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+}
+
+#fire-button:active,
+#fire-button.pressed {
+    transform: scale(0.94);
+    background: rgba(255, 59, 48, 1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+#fire-button:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.9);
+    outline-offset: 3px;
+}
+
 #error-overlay {
     position: absolute;
     inset: 0;
