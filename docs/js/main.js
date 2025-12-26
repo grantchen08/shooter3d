@@ -1,6 +1,6 @@
 /**
  * Snowball Blitz - Main Game File
- * Stage 1: Player & Camera System
+ * Stage 2: Projectile System & Physics
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -12,6 +12,9 @@ let scene, camera, renderer;
 let world; // Cannon.js physics world
 let ground; // Ground plane
 let player; // Player character
+
+// Timing (for physics + lifetimes)
+const clock = new THREE.Clock();
 
 // Camera control variables
 let cameraDistance = 8; // Distance from player
@@ -28,6 +31,12 @@ let lastMouseY = 0;
 let lastTouchX = 0;
 let lastTouchY = 0;
 const rotationSpeed = 0.005; // Sensitivity for camera rotation
+
+// Projectiles
+const projectiles = []; // { mesh: THREE.Mesh, body: CANNON.Body, age: number }
+const projectileRadius = 0.15;
+const projectileSpeed = 18; // fixed launch speed
+const projectileMaxAgeSec = 8;
 
 function showErrorOverlay(title, details) {
     const container = document.getElementById('game-container');
@@ -108,6 +117,9 @@ function init() {
     
     // Setup input handlers
     setupInputHandlers();
+
+    // Temporary firing input (until the on-screen fire button stage)
+    setupFireInputHandlers();
     
     // Start render loop
     animate();
@@ -162,6 +174,7 @@ function setupPhysics() {
     // Create cannon-es physics world
     world = new CANNON.World();
     world.gravity.set(0, -9.8, 0); // Standard gravity
+    world.allowSleep = true;
     
     // Create ground physics body
     const groundShape = new CANNON.Plane();
@@ -169,6 +182,17 @@ function setupPhysics() {
     groundBody.addShape(groundShape);
     groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
     world.addBody(groundBody);
+}
+
+function setupFireInputHandlers() {
+    // Keyboard: Space fires a projectile (desktop-friendly for now)
+    window.addEventListener('keydown', (event) => {
+        if (event.repeat) return;
+        if (event.code === 'Space') {
+            fireProjectile();
+            event.preventDefault();
+        }
+    });
 }
 
 function onWindowResize() {
@@ -204,6 +228,84 @@ function setupInputHandlers() {
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
     canvas.addEventListener('touchend', onTouchEnd);
     canvas.addEventListener('touchcancel', onTouchEnd);
+}
+
+function fireProjectile() {
+    if (!scene || !world || !camera || !player) return;
+
+    // Direction: camera forward vector
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    dir.normalize();
+
+    // Spawn position: slightly in front of and above player
+    const spawnPos = player.position
+        .clone()
+        .add(new THREE.Vector3(0, 1.0, 0))
+        .add(dir.clone().multiplyScalar(1.0));
+
+    // Three.js mesh
+    const geometry = new THREE.SphereGeometry(projectileRadius, 16, 16);
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.35,
+        metalness: 0.05,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(spawnPos);
+    scene.add(mesh);
+
+    // Physics body
+    const shape = new CANNON.Sphere(projectileRadius);
+    const body = new CANNON.Body({
+        mass: 0.25,
+        shape,
+        position: new CANNON.Vec3(spawnPos.x, spawnPos.y, spawnPos.z),
+    });
+    body.velocity.set(
+        dir.x * projectileSpeed,
+        dir.y * projectileSpeed,
+        dir.z * projectileSpeed
+    );
+    body.linearDamping = 0.01;
+    world.addBody(body);
+
+    projectiles.push({ mesh, body, age: 0 });
+}
+
+function removeProjectile(idx) {
+    const p = projectiles[idx];
+    if (!p) return;
+    scene.remove(p.mesh);
+    world.removeBody(p.body);
+    projectiles.splice(idx, 1);
+}
+
+function updateProjectiles(dt) {
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.age += dt;
+
+        // Sync mesh from physics body
+        p.mesh.position.set(p.body.position.x, p.body.position.y, p.body.position.z);
+        p.mesh.quaternion.set(
+            p.body.quaternion.x,
+            p.body.quaternion.y,
+            p.body.quaternion.z,
+            p.body.quaternion.w
+        );
+
+        // Cleanup rules: lifetime or hit ground (y <= 0)
+        if (p.age > projectileMaxAgeSec) {
+            removeProjectile(i);
+            continue;
+        }
+
+        // Give a short grace period so firing downward doesn't instantly despawn
+        if (p.age > 0.15 && p.body.position.y <= projectileRadius * 0.5) {
+            removeProjectile(i);
+        }
+    }
 }
 
 function onMouseDown(event) {
@@ -272,9 +374,14 @@ function onTouchEnd(event) {
 
 function animate() {
     requestAnimationFrame(animate);
-    
-    // Update physics world
-    world.step(1/60); // Fixed timestep
+
+    const dt = Math.min(clock.getDelta(), 0.05); // cap for tab switching / hiccups
+
+    // Update physics world with variable delta (internally sub-stepped)
+    world.step(1 / 60, dt, 5);
+
+    // Sync physics -> visuals
+    updateProjectiles(dt);
     
     // Camera position is updated in real-time via input handlers
     // but we ensure it's updated here too for consistency
