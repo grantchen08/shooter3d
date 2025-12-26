@@ -38,6 +38,18 @@ const projectileRadius = 0.15;
 const projectileSpeed = 18; // fixed launch speed
 const projectileMaxAgeSec = 8;
 
+// Lightweight debug helper (console + on-screen line)
+let debugEl = null;
+function debugLog(message, data) {
+    // Use console.log (not console.debug) so it shows by default
+    if (data !== undefined) console.log(message, data);
+    else console.log(message);
+
+    if (!debugEl) return;
+    const suffix = data !== undefined ? ` ${JSON.stringify(data)}` : '';
+    debugEl.textContent = `${message}${suffix}`;
+}
+
 function showErrorOverlay(title, details) {
     const container = document.getElementById('game-container');
     let overlay = document.getElementById('error-overlay');
@@ -71,7 +83,7 @@ function init() {
         return;
     }
 
-    console.debug('[SnowballBlitz] init() starting');
+    debugLog('[SnowballBlitz] init() starting');
 
     // Create Three.js scene
     scene = new THREE.Scene();
@@ -123,7 +135,22 @@ function init() {
     // Temporary firing input (until the on-screen fire button stage)
     setupFireInputHandlers();
 
-    console.debug('[SnowballBlitz] init() complete');
+    // On-screen debug line (helps when console is filtered / hidden)
+    const uiOverlay = document.getElementById('ui-overlay');
+    debugEl = document.createElement('div');
+    debugEl.style.position = 'absolute';
+    debugEl.style.left = '8px';
+    debugEl.style.bottom = '8px';
+    debugEl.style.padding = '6px 8px';
+    debugEl.style.background = 'rgba(0,0,0,0.55)';
+    debugEl.style.color = '#fff';
+    debugEl.style.fontSize = '12px';
+    debugEl.style.borderRadius = '6px';
+    debugEl.style.pointerEvents = 'none';
+    debugEl.textContent = 'Debug: ready';
+    uiOverlay.appendChild(debugEl);
+
+    debugLog('[SnowballBlitz] init() complete');
     
     // Start render loop
     animate();
@@ -189,11 +216,11 @@ function setupPhysics() {
 }
 
 function setupFireInputHandlers() {
-    console.debug('[SnowballBlitz] setupFireInputHandlers()');
+    debugLog('[SnowballBlitz] setupFireInputHandlers()');
 
     // Keyboard: Space fires a projectile (desktop-friendly for now)
-    window.addEventListener('keydown', (event) => {
-        console.debug('[SnowballBlitz] keydown', {
+    document.addEventListener('keydown', (event) => {
+        debugLog('[SnowballBlitz] keydown', {
             code: event.code,
             key: event.key,
             repeat: event.repeat,
@@ -201,16 +228,16 @@ function setupFireInputHandlers() {
         });
         if (event.repeat) return;
         if (event.code === 'Space') {
-            console.debug('[SnowballBlitz] Space pressed -> fireProjectile()');
+            debugLog('[SnowballBlitz] Space pressed -> fireProjectile()');
             fireProjectile();
             event.preventDefault();
         }
-    });
+    }, { capture: true });
 
     // Temporary: Click/tap canvas to fire (useful if keyboard focus is an issue)
     const canvas = document.getElementById('game-canvas');
     canvas.addEventListener('click', () => {
-        console.debug('[SnowballBlitz] canvas click -> fireProjectile()');
+        debugLog('[SnowballBlitz] canvas click -> fireProjectile()');
         fireProjectile();
     });
 }
@@ -252,7 +279,7 @@ function setupInputHandlers() {
 
 function fireProjectile() {
     if (!scene || !world || !camera || !player) {
-        console.debug('[SnowballBlitz] fireProjectile() blocked - missing refs', {
+        debugLog('[SnowballBlitz] fireProjectile() blocked - missing refs', {
             scene: !!scene,
             world: !!world,
             camera: !!camera,
@@ -300,7 +327,7 @@ function fireProjectile() {
 
     projectiles.push({ mesh, body, age: 0 });
 
-    console.debug('[SnowballBlitz] projectile spawned', {
+    debugLog('[SnowballBlitz] projectile spawned', {
         spawn: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
         dir: { x: dir.x, y: dir.y, z: dir.z },
         speed: projectileSpeed,
