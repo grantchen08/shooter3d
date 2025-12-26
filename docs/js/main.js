@@ -1,6 +1,6 @@
 /**
  * Snowball Blitz - Main Game File
- * Stage 2: Projectile System & Physics
+ * Stage 3: Trajectory Visualization
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -37,6 +37,12 @@ const projectiles = []; // { mesh: THREE.Mesh, body: CANNON.Body, age: number }
 const projectileRadius = 0.15;
 const projectileSpeed = 18; // fixed launch speed
 const projectileMaxAgeSec = 8;
+
+// Trajectory visualization
+let trajectoryLine = null;
+const trajectoryPoints = []; // array of THREE.Vector3 reused each update
+const trajectoryMaxTimeSec = 3.0;
+const trajectoryTimeStepSec = 0.08;
 
 // Lightweight debug helper (console + on-screen line)
 let debugEl = null;
@@ -135,6 +141,9 @@ function init() {
     // Temporary firing input (until the on-screen fire button stage)
     setupFireInputHandlers();
 
+    // Trajectory line
+    setupTrajectoryLine();
+
     // On-screen debug line (helps when console is filtered / hidden)
     const uiOverlay = document.getElementById('ui-overlay');
     debugEl = document.createElement('div');
@@ -215,6 +224,26 @@ function setupPhysics() {
     world.addBody(groundBody);
 }
 
+function setupTrajectoryLine() {
+    const material = new THREE.LineDashedMaterial({
+        color: 0xffffff,
+        dashSize: 0.25,
+        gapSize: 0.18,
+        linewidth: 1, // ignored on most platforms, but harmless
+        transparent: true,
+        opacity: 0.95,
+    });
+
+    // Initialize with a tiny geometry; we replace positions each update
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(3 * 2); // 2 points minimum
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    trajectoryLine = new THREE.Line(geometry, material);
+    trajectoryLine.frustumCulled = false;
+    scene.add(trajectoryLine);
+}
+
 function setupFireInputHandlers() {
     debugLog('[SnowballBlitz] setupFireInputHandlers()');
 
@@ -275,6 +304,66 @@ function updateCameraPosition() {
     camera.lookAt(aimTarget);
 }
 
+function getAimDirection() {
+    // Aim direction is opposite of player->camera orbit direction
+    return new THREE.Vector3(
+        -Math.sin(cameraRotationX) * Math.cos(cameraRotationY),
+        -Math.sin(cameraRotationY),
+        -Math.cos(cameraRotationX) * Math.cos(cameraRotationY)
+    ).normalize();
+}
+
+function getProjectileSpawnPosition(dir) {
+    return player.position
+        .clone()
+        .add(new THREE.Vector3(0, 1.0, 0))
+        .add(dir.clone().multiplyScalar(1.0));
+}
+
+function updateTrajectoryLine() {
+    if (!trajectoryLine || !player) return;
+
+    const dir = getAimDirection();
+    const p0 = getProjectileSpawnPosition(dir);
+    const v0 = dir.clone().multiplyScalar(projectileSpeed);
+    const g = new THREE.Vector3(0, -9.8, 0);
+
+    // Build points until we hit the ground (y <= projectileRadius) or max time
+    trajectoryPoints.length = 0;
+    trajectoryPoints.push(p0.clone());
+
+    for (let t = trajectoryTimeStepSec; t <= trajectoryMaxTimeSec; t += trajectoryTimeStepSec) {
+        const pt = p0
+            .clone()
+            .add(v0.clone().multiplyScalar(t))
+            .add(g.clone().multiplyScalar(0.5 * t * t));
+
+        trajectoryPoints.push(pt);
+        if (pt.y <= projectileRadius * 0.5) break;
+    }
+
+    // Update geometry positions
+    const needed = Math.max(trajectoryPoints.length, 2);
+    const geom = trajectoryLine.geometry;
+    const attr = geom.getAttribute('position');
+    if (!attr || attr.count !== needed) {
+        const positions = new Float32Array(needed * 3);
+        geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    }
+
+    const posAttr = geom.getAttribute('position');
+    for (let i = 0; i < needed; i++) {
+        const p = trajectoryPoints[Math.min(i, trajectoryPoints.length - 1)];
+        posAttr.setXYZ(i, p.x, p.y, p.z);
+    }
+    posAttr.needsUpdate = true;
+    geom.setDrawRange(0, needed);
+    geom.computeBoundingSphere();
+
+    // Required for dashed lines
+    trajectoryLine.computeLineDistances();
+}
+
 function setupInputHandlers() {
     const canvas = document.getElementById('game-canvas');
     
@@ -302,19 +391,11 @@ function fireProjectile() {
         return;
     }
 
-    // Direction: aim forward (from player outward), consistent with updateCameraPosition()
-    // Note: camera orbit direction is player->camera; aim direction is the opposite.
-    const dir = new THREE.Vector3(
-        -Math.sin(cameraRotationX) * Math.cos(cameraRotationY),
-        -Math.sin(cameraRotationY),
-        -Math.cos(cameraRotationX) * Math.cos(cameraRotationY)
-    ).normalize();
+    // Direction: aim forward (from player outward)
+    const dir = getAimDirection();
 
     // Spawn position: slightly in front of and above player
-    const spawnPos = player.position
-        .clone()
-        .add(new THREE.Vector3(0, 1.0, 0))
-        .add(dir.clone().multiplyScalar(1.0));
+    const spawnPos = getProjectileSpawnPosition(dir);
 
     // Three.js mesh
     const geometry = new THREE.SphereGeometry(projectileRadius, 16, 16);
@@ -465,6 +546,9 @@ function animate() {
     // Camera position is updated in real-time via input handlers
     // but we ensure it's updated here too for consistency
     updateCameraPosition();
+
+    // Update predicted trajectory each frame (cheap at these point counts)
+    updateTrajectoryLine();
     
     // Render scene
     renderer.render(scene, camera);
