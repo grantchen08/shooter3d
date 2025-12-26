@@ -269,8 +269,47 @@ function setupCollisionHandlers() {
         const projA = projectileByBodyId.get(bodyA.id);
         const projB = projectileByBodyId.get(bodyB.id);
 
+        // Debug: log only when a projectile is involved
+        if (projA || projB) {
+            debugLog('[SnowballBlitz] beginContact', {
+                a: { id: bodyA.id, group: bodyA.collisionFilterGroup },
+                b: { id: bodyB.id, group: bodyB.collisionFilterGroup },
+                projA: !!projA,
+                projB: !!projB,
+                isTargetA: targetByBodyId.has(bodyA.id),
+                isTargetB: targetByBodyId.has(bodyB.id),
+                isWorldA: worldBodyIds.has(bodyA.id),
+                isWorldB: worldBodyIds.has(bodyB.id),
+            });
+        }
+
         if (projA) handleProjectileContact(projA, bodyB);
         if (projB) handleProjectileContact(projB, bodyA);
+    });
+
+    // Disable collision response for projectile<->target (piercing) while still allowing
+    // projectile<->world to collide normally.
+    world.addEventListener('preSolve', (event) => {
+        const eqs = event.contactEquations || event.contactEquation || event.contacts;
+        if (!Array.isArray(eqs)) return;
+
+        for (const eq of eqs) {
+            const bi = eq.bi || eq.bodyA;
+            const bj = eq.bj || eq.bodyB;
+            if (!bi || !bj) continue;
+
+            const projI = projectileByBodyId.has(bi.id);
+            const projJ = projectileByBodyId.has(bj.id);
+            if (!projI && !projJ) continue;
+
+            const isTargetI = targetByBodyId.has(bi.id);
+            const isTargetJ = targetByBodyId.has(bj.id);
+
+            // If projectile is contacting a target, disable the contact equation so it won't bounce.
+            if ((projI && isTargetJ) || (projJ && isTargetI)) {
+                eq.enabled = false;
+            }
+        }
     });
 }
 
@@ -278,12 +317,14 @@ function handleProjectileContact(projectile, otherBody) {
     // Projectile vs target: destroy target, keep projectile (piercing)
     const target = targetByBodyId.get(otherBody.id);
     if (target && target.alive) {
+        debugLog('[SnowballBlitz] projectile hit target', { projectileId: projectile.body.id, targetId: otherBody.id });
         destroyTarget(target);
         return;
     }
 
     // Projectile vs world: mark projectile for removal
     if (worldBodyIds.has(otherBody.id)) {
+        debugLog('[SnowballBlitz] projectile hit world', { projectileId: projectile.body.id, worldId: otherBody.id });
         projectilesToRemove.add(projectile.body.id);
     }
 }
