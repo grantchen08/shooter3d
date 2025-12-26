@@ -91,8 +91,11 @@ const trajectoryTimeStepSec = 0.08;
 
 // Lightweight debug helper (console + on-screen line)
 let debugEl = null;
+const DEBUG =
+    new URLSearchParams(window.location.search).has('debug') ||
+    window.location.hash.includes('debug');
 function debugLog(message, data) {
-    // Use console.log (not console.debug) so it shows by default
+    if (!DEBUG) return;
     if (data !== undefined) console.log(message, data);
     else console.log(message);
 
@@ -198,20 +201,22 @@ function init() {
     // HUD
     setupHud();
 
-    // On-screen debug line (helps when console is filtered / hidden)
-    const uiOverlay = document.getElementById('ui-overlay');
-    debugEl = document.createElement('div');
-    debugEl.style.position = 'absolute';
-    debugEl.style.left = '8px';
-    debugEl.style.bottom = '8px';
-    debugEl.style.padding = '6px 8px';
-    debugEl.style.background = 'rgba(0,0,0,0.55)';
-    debugEl.style.color = '#fff';
-    debugEl.style.fontSize = '12px';
-    debugEl.style.borderRadius = '6px';
-    debugEl.style.pointerEvents = 'none';
-    debugEl.textContent = 'Debug: ready';
-    uiOverlay.appendChild(debugEl);
+    // On-screen debug line (only with ?debug=1)
+    if (DEBUG) {
+        const uiOverlay = document.getElementById('ui-overlay');
+        debugEl = document.createElement('div');
+        debugEl.style.position = 'absolute';
+        debugEl.style.left = '8px';
+        debugEl.style.bottom = '8px';
+        debugEl.style.padding = '6px 8px';
+        debugEl.style.background = 'rgba(0,0,0,0.55)';
+        debugEl.style.color = '#fff';
+        debugEl.style.fontSize = '12px';
+        debugEl.style.borderRadius = '6px';
+        debugEl.style.pointerEvents = 'none';
+        debugEl.textContent = 'Debug: ready';
+        uiOverlay.appendChild(debugEl);
+    }
 
     // Fire button UI (desktop + mobile)
     setupFireButton();
@@ -787,6 +792,13 @@ function setupFireInputHandlers() {
 
     // Keyboard: Space fires a projectile (desktop-friendly for now)
     document.addEventListener('keydown', (event) => {
+        // QoL: restart hotkey
+        if (!event.repeat && event.code === 'KeyR') {
+            resetGame();
+            event.preventDefault();
+            return;
+        }
+
         debugLog('[SnowballBlitz] keydown', {
             code: event.code,
             key: event.key,

@@ -47,9 +47,17 @@ If using VS Code, install the "Live Server" extension and right-click `index.htm
 - Modern web browser with WebGL support (Chrome, Firefox, Safari, Edge)
 - Landscape orientation (game is designed for horizontal screens)
 
+## Testing notes
+
+- **GitHub Pages caching**: if you don’t see the latest changes, do a hard refresh (`Ctrl+Shift+R`) or use a private window.
+- **Debug mode**: open the game with `?debug=1` to enable extra logs and the on-screen debug line.
+- **WebGL issues**:
+  - Chrome/Chromium: check `chrome://gpu` and ensure hardware acceleration is enabled
+  - Try Firefox if Chromium fails to create a WebGL context on Linux
+
 ## Current Status
 
-**Stage 1 Complete:** Player + third-person camera orbit with mouse/touch drag
+Prototype includes: aim drag, projectile physics + trajectory, targets + scoring, timer/win/lose, and basic effects.
 
 ## Next Steps
 
