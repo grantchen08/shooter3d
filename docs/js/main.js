@@ -494,8 +494,6 @@ function onMouseMove(event) {
     
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
-    
-    updateCameraPosition();
     event.preventDefault();
 }
 
@@ -527,8 +525,6 @@ function onTouchMove(event) {
     
     lastTouchX = event.touches[0].clientX;
     lastTouchY = event.touches[0].clientY;
-    
-    updateCameraPosition();
     event.preventDefault();
 }
 
@@ -546,10 +542,6 @@ function animate() {
 
     // Sync physics -> visuals
     updateProjectiles(dt);
-    
-    // Camera position is updated in real-time via input handlers
-    // but we ensure it's updated here too for consistency
-    updateCameraPosition();
 
     // Update predicted trajectory each frame (cheap at these point counts)
     updateTrajectoryLine();
