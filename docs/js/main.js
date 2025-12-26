@@ -300,13 +300,12 @@ function updateCameraPosition() {
         .add(toCamera.clone().multiplyScalar(cameraDistance));
     camera.position.copy(camPos);
 
-    // Aim forward FROM the player (independent of camera orbit)
-    const aimForward = getAimDirection();
-    const aimTarget = player.position
-        .clone()
-        .add(new THREE.Vector3(0, cameraHeight * 0.5, 0))
-        .add(aimForward.multiplyScalar(12));
-    camera.lookAt(aimTarget);
+    // Keep camera orientation fixed: always look at the player (not at the aim direction)
+    camera.lookAt(
+        player.position.x,
+        player.position.y + cameraHeight * 0.5,
+        player.position.z
+    );
 }
 
 function getAimDirection() {
