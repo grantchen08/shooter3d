@@ -35,6 +35,46 @@ html, body {
     z-index: 10;
 }
 
+#error-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    z-index: 200;
+    pointer-events: auto;
+}
+
+#error-overlay .panel {
+    max-width: 720px;
+    width: 100%;
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 18px 18px;
+    line-height: 1.4;
+}
+
+#error-overlay h2 {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+#error-overlay p {
+    margin: 8px 0;
+}
+
+#error-overlay code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
 /* Ensure landscape orientation */
 @media screen and (orientation: portrait) {
     #game-container::before {
