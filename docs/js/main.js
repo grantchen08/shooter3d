@@ -210,15 +210,23 @@ function init() {
 
 function setupHud() {
     scoreValueEl = document.getElementById('hud-score-value');
+    debugLog('[SnowballBlitz] setupHud()', { foundScoreEl: !!scoreValueEl });
     setScore(0);
 }
 
 function setScore(value) {
     score = value;
-    if (scoreValueEl) scoreValueEl.textContent = String(score);
+    // Lazy lookup in case DOM changed / element wasn't found at init time.
+    if (!scoreValueEl) scoreValueEl = document.getElementById('hud-score-value');
+    if (scoreValueEl) {
+        scoreValueEl.textContent = String(score);
+    } else {
+        debugLog('[SnowballBlitz] WARN: score element missing');
+    }
 }
 
 function addScore(delta) {
+    debugLog('[SnowballBlitz] addScore()', { delta, before: score, after: score + delta });
     setScore(score + delta);
 }
 
