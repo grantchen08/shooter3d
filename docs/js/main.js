@@ -67,6 +67,9 @@ let endTitleEl = null;
 // Floating combat text
 const floatingTexts = []; // { el: HTMLElement, worldPos: THREE.Vector3, age: number, duration: number }
 
+// Particle bursts (snow explosion)
+const particleBursts = []; // { points, geom, positions, velocities, age, duration, material }
+
 // Collision groups
 const CG_PROJECTILE = 1;
 const CG_TARGET = 2;
@@ -461,7 +464,9 @@ function destroyTarget(target) {
     target.alive = false;
 
     // Spawn floating score text at target position (use mesh position; it's at platform surface)
-    spawnFloatingText(`+${SCORE_PER_TARGET}`, target.mesh.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
+    const fxPos = target.mesh.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+    spawnFloatingText(`+${SCORE_PER_TARGET}`, fxPos);
+    spawnSnowExplosion(fxPos);
     addScore(SCORE_PER_TARGET);
 
     scene.remove(target.mesh);
@@ -475,6 +480,85 @@ function destroyTarget(target) {
     if (gameState === 'playing' && remainingAlive === 0) {
         debugLog('[SnowballBlitz] win condition met (all targets destroyed)');
         endGame('win');
+    }
+}
+
+function spawnSnowExplosion(worldPos) {
+    // Small, cheap particle burst (no textures)
+    const count = 60;
+    const positions = new Float32Array(count * 3);
+    const velocities = new Float32Array(count * 3);
+
+    for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+        // Start near the hit point
+        positions[idx + 0] = worldPos.x + (Math.random() - 0.5) * 0.15;
+        positions[idx + 1] = worldPos.y + (Math.random() - 0.5) * 0.15;
+        positions[idx + 2] = worldPos.z + (Math.random() - 0.5) * 0.15;
+
+        // Random velocity with slight upward bias
+        const vx = (Math.random() - 0.5) * 3.0;
+        const vy = Math.random() * 3.5 + 1.0;
+        const vz = (Math.random() - 0.5) * 3.0;
+        velocities[idx + 0] = vx;
+        velocities[idx + 1] = vy;
+        velocities[idx + 2] = vz;
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const material = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.09,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+    });
+
+    const points = new THREE.Points(geom, material);
+    points.frustumCulled = false;
+    scene.add(points);
+
+    particleBursts.push({
+        points,
+        geom,
+        positions,
+        velocities,
+        age: 0,
+        duration: 0.7,
+        material,
+    });
+}
+
+function updateParticleBursts(dt) {
+    const g = -9.8;
+    for (let i = particleBursts.length - 1; i >= 0; i--) {
+        const b = particleBursts[i];
+        b.age += dt;
+
+        const t = Math.min(b.age / b.duration, 1);
+        b.material.opacity = 0.9 * (1 - t);
+
+        const pos = b.positions;
+        const vel = b.velocities;
+        for (let j = 0; j < pos.length; j += 3) {
+            vel[j + 1] += g * dt * 0.35; // light gravity so it feels "snowy"
+
+            pos[j + 0] += vel[j + 0] * dt;
+            pos[j + 1] += vel[j + 1] * dt;
+            pos[j + 2] += vel[j + 2] * dt;
+        }
+
+        const attr = b.geom.getAttribute('position');
+        attr.needsUpdate = true;
+
+        if (b.age >= b.duration) {
+            scene.remove(b.points);
+            b.geom.dispose();
+            b.material.dispose();
+            particleBursts.splice(i, 1);
+        }
     }
 }
 
@@ -1002,6 +1086,9 @@ function animate() {
 
     // Update floating combat text
     updateFloatingTexts(dt);
+
+    // Update particle effects
+    updateParticleBursts(dt);
 
     // Timer/game loop
     if (gameState === 'playing') {
