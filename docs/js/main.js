@@ -19,10 +19,16 @@ const clock = new THREE.Clock();
 // Camera control variables
 let cameraDistance = 8; // Distance from player
 let cameraHeight = 3; // Height offset from player
-let cameraRotationX = 0; // Horizontal rotation (yaw) in radians
-let cameraRotationY = Math.PI / 6; // Vertical rotation (pitch) in radians - start slightly down
-const minPitch = -Math.PI / 3; // Maximum upward angle
-const maxPitch = Math.PI / 3; // Maximum downward angle
+
+// Camera orbit is fixed (3rd-person view). Drag/swipe controls AIM, not camera orbit.
+const cameraOrbitYaw = 0; // radians
+const cameraOrbitPitch = Math.PI / 10; // slightly above horizon
+
+// Aim control variables (projectile orientation)
+let aimYaw = 0; // Horizontal aim (yaw) in radians
+let aimPitch = Math.PI / 6; // Vertical aim (pitch) in radians; +pitch aims down with our convention
+const minAimPitch = -Math.PI / 3; // aim up limit
+const maxAimPitch = Math.PI / 3; // aim down limit
 
 // Input state
 let isDragging = false;
@@ -281,22 +287,21 @@ function onWindowResize() {
 }
 
 function updateCameraPosition() {
-    // Vector from player -> camera (orbit direction)
+    // Vector from player -> camera (fixed orbit direction)
     const toCamera = new THREE.Vector3(
-        Math.sin(cameraRotationX) * Math.cos(cameraRotationY),
-        Math.sin(cameraRotationY),
-        Math.cos(cameraRotationX) * Math.cos(cameraRotationY)
+        Math.sin(cameraOrbitYaw) * Math.cos(cameraOrbitPitch),
+        Math.sin(cameraOrbitPitch),
+        Math.cos(cameraOrbitYaw) * Math.cos(cameraOrbitPitch)
     ).normalize();
 
-    // Place camera behind the player (plus height offset)
-    const camPos = player.position
-        .clone()
+    // Place camera at a fixed offset from the player (plus height)
+    const camPos = player.position.clone()
         .add(new THREE.Vector3(0, cameraHeight, 0))
-        .add(toCamera.multiplyScalar(cameraDistance));
+        .add(toCamera.clone().multiplyScalar(cameraDistance));
     camera.position.copy(camPos);
 
-    // Aim forward FROM the player, opposite of the camera orbit direction
-    const aimForward = toCamera.clone().multiplyScalar(-1).normalize();
+    // Aim forward FROM the player (independent of camera orbit)
+    const aimForward = getAimDirection();
     const aimTarget = player.position
         .clone()
         .add(new THREE.Vector3(0, cameraHeight * 0.5, 0))
@@ -305,11 +310,11 @@ function updateCameraPosition() {
 }
 
 function getAimDirection() {
-    // Aim direction is opposite of player->camera orbit direction
+    // Aim direction controlled by drag/swipe (projectile orientation)
     return new THREE.Vector3(
-        -Math.sin(cameraRotationX) * Math.cos(cameraRotationY),
-        -Math.sin(cameraRotationY),
-        -Math.cos(cameraRotationX) * Math.cos(cameraRotationY)
+        -Math.sin(aimYaw) * Math.cos(aimPitch),
+        -Math.sin(aimPitch),
+        -Math.cos(aimYaw) * Math.cos(aimPitch)
     ).normalize();
 }
 
@@ -481,12 +486,12 @@ function onMouseMove(event) {
     const deltaX = event.clientX - lastMouseX;
     const deltaY = event.clientY - lastMouseY;
     
-    // Rotate camera horizontally (yaw)
-    cameraRotationX -= deltaX * rotationSpeed;
+    // Adjust aim horizontally (yaw)
+    aimYaw -= deltaX * rotationSpeed;
     
-    // Rotate camera vertically (pitch) with constraints
-    cameraRotationY -= deltaY * rotationSpeed;
-    cameraRotationY = Math.max(minPitch, Math.min(maxPitch, cameraRotationY));
+    // Adjust aim vertically (pitch) with constraints
+    aimPitch -= deltaY * rotationSpeed;
+    aimPitch = Math.max(minAimPitch, Math.min(maxAimPitch, aimPitch));
     
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
@@ -514,12 +519,12 @@ function onTouchMove(event) {
     const deltaX = event.touches[0].clientX - lastTouchX;
     const deltaY = event.touches[0].clientY - lastTouchY;
     
-    // Rotate camera horizontally (yaw)
-    cameraRotationX -= deltaX * rotationSpeed;
+    // Adjust aim horizontally (yaw)
+    aimYaw -= deltaX * rotationSpeed;
     
-    // Rotate camera vertically (pitch) with constraints
-    cameraRotationY -= deltaY * rotationSpeed;
-    cameraRotationY = Math.max(minPitch, Math.min(maxPitch, cameraRotationY));
+    // Adjust aim vertically (pitch) with constraints
+    aimPitch -= deltaY * rotationSpeed;
+    aimPitch = Math.max(minAimPitch, Math.min(maxAimPitch, aimPitch));
     
     lastTouchX = event.touches[0].clientX;
     lastTouchY = event.touches[0].clientY;
