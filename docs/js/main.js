@@ -71,6 +71,8 @@ function init() {
         return;
     }
 
+    console.debug('[SnowballBlitz] init() starting');
+
     // Create Three.js scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); // Sky blue
@@ -120,6 +122,8 @@ function init() {
 
     // Temporary firing input (until the on-screen fire button stage)
     setupFireInputHandlers();
+
+    console.debug('[SnowballBlitz] init() complete');
     
     // Start render loop
     animate();
@@ -185,13 +189,29 @@ function setupPhysics() {
 }
 
 function setupFireInputHandlers() {
+    console.debug('[SnowballBlitz] setupFireInputHandlers()');
+
     // Keyboard: Space fires a projectile (desktop-friendly for now)
     window.addEventListener('keydown', (event) => {
+        console.debug('[SnowballBlitz] keydown', {
+            code: event.code,
+            key: event.key,
+            repeat: event.repeat,
+            target: event.target && event.target.tagName ? event.target.tagName : event.target,
+        });
         if (event.repeat) return;
         if (event.code === 'Space') {
+            console.debug('[SnowballBlitz] Space pressed -> fireProjectile()');
             fireProjectile();
             event.preventDefault();
         }
+    });
+
+    // Temporary: Click/tap canvas to fire (useful if keyboard focus is an issue)
+    const canvas = document.getElementById('game-canvas');
+    canvas.addEventListener('click', () => {
+        console.debug('[SnowballBlitz] canvas click -> fireProjectile()');
+        fireProjectile();
     });
 }
 
@@ -231,7 +251,15 @@ function setupInputHandlers() {
 }
 
 function fireProjectile() {
-    if (!scene || !world || !camera || !player) return;
+    if (!scene || !world || !camera || !player) {
+        console.debug('[SnowballBlitz] fireProjectile() blocked - missing refs', {
+            scene: !!scene,
+            world: !!world,
+            camera: !!camera,
+            player: !!player,
+        });
+        return;
+    }
 
     // Direction: camera forward vector
     const dir = new THREE.Vector3();
@@ -271,6 +299,13 @@ function fireProjectile() {
     world.addBody(body);
 
     projectiles.push({ mesh, body, age: 0 });
+
+    console.debug('[SnowballBlitz] projectile spawned', {
+        spawn: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
+        dir: { x: dir.x, y: dir.y, z: dir.z },
+        speed: projectileSpeed,
+        count: projectiles.length,
+    });
 }
 
 function removeProjectile(idx) {
