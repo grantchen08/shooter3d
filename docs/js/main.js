@@ -1,6 +1,6 @@
 /**
  * Snowball Blitz - Main Game File
- * Stage 5: Targets (Snowmen) + Tiered Platforms
+ * Stage 6: Collisions + Piercing Logic
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -47,6 +47,19 @@ const projectileMaxAgeSec = 8;
 // Platforms & targets
 const platforms = []; // { mesh: THREE.Mesh, body: CANNON.Body }
 const targets = []; // { mesh: THREE.Group, body: CANNON.Body, alive: boolean }
+
+// Collision groups
+const CG_PROJECTILE = 1;
+const CG_TARGET = 2;
+const CG_WORLD = 4;
+
+// Body lookup tables (by cannon body id)
+const projectileByBodyId = new Map(); // id -> projectile record
+const targetByBodyId = new Map(); // id -> target record
+const worldBodyIds = new Set(); // ids of ground/platform bodies
+
+// Collision-driven projectile removal
+const projectilesToRemove = new Set(); // body.id values
 
 // Trajectory visualization
 let trajectoryLine = null;
@@ -141,6 +154,9 @@ function init() {
     
     // Setup physics world
     setupPhysics();
+
+    // Collision handlers
+    setupCollisionHandlers();
 
     // Build tiered platforms + static targets
     createPlatformsAndTargets();
@@ -237,7 +253,48 @@ function setupPhysics() {
     const groundBody = new CANNON.Body({ mass: 0 }); // Static body
     groundBody.addShape(groundShape);
     groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+    groundBody.collisionFilterGroup = CG_WORLD;
+    groundBody.collisionFilterMask = CG_PROJECTILE;
     world.addBody(groundBody);
+    worldBodyIds.add(groundBody.id);
+}
+
+function setupCollisionHandlers() {
+    // Note: cannon-es emits beginContact when two bodies start touching.
+    world.addEventListener('beginContact', (event) => {
+        const bodyA = event.bodyA;
+        const bodyB = event.bodyB;
+        if (!bodyA || !bodyB) return;
+
+        const projA = projectileByBodyId.get(bodyA.id);
+        const projB = projectileByBodyId.get(bodyB.id);
+
+        if (projA) handleProjectileContact(projA, bodyB);
+        if (projB) handleProjectileContact(projB, bodyA);
+    });
+}
+
+function handleProjectileContact(projectile, otherBody) {
+    // Projectile vs target: destroy target, keep projectile (piercing)
+    const target = targetByBodyId.get(otherBody.id);
+    if (target && target.alive) {
+        destroyTarget(target);
+        return;
+    }
+
+    // Projectile vs world: mark projectile for removal
+    if (worldBodyIds.has(otherBody.id)) {
+        projectilesToRemove.add(projectile.body.id);
+    }
+}
+
+function destroyTarget(target) {
+    target.alive = false;
+    scene.remove(target.mesh);
+    world.removeBody(target.body);
+    targetByBodyId.delete(target.body.id);
+
+    debugLog('[SnowballBlitz] target destroyed', { remaining: targets.filter(t => t.alive).length });
 }
 
 function createPlatformsAndTargets() {
@@ -272,7 +329,10 @@ function createTieredPlatforms() {
             shape,
             position: new CANNON.Vec3(s.x, s.y, s.z),
         });
+        body.collisionFilterGroup = CG_WORLD;
+        body.collisionFilterMask = CG_PROJECTILE;
         world.addBody(body);
+        worldBodyIds.add(body.id);
 
         platforms.push({ mesh, body });
     }
@@ -337,9 +397,15 @@ function createTargets() {
             shape,
             position: new CANNON.Vec3(p.x, p.y + 0.55, p.z),
         });
+        // Targets should not deflect the projectile (piercing), but should still report contacts.
+        body.collisionResponse = false;
+        body.collisionFilterGroup = CG_TARGET;
+        body.collisionFilterMask = CG_PROJECTILE;
         world.addBody(body);
 
-        targets.push({ mesh, body, alive: true });
+        const rec = { mesh, body, alive: true };
+        targets.push(rec);
+        targetByBodyId.set(body.id, rec);
     }
 
     debugLog('[SnowballBlitz] targets created', { count: targets.length });
@@ -560,6 +626,8 @@ function fireProjectile() {
         shape,
         position: new CANNON.Vec3(spawnPos.x, spawnPos.y, spawnPos.z),
     });
+    body.collisionFilterGroup = CG_PROJECTILE;
+    body.collisionFilterMask = CG_WORLD | CG_TARGET;
     body.velocity.set(
         dir.x * projectileSpeed,
         dir.y * projectileSpeed,
@@ -568,7 +636,9 @@ function fireProjectile() {
     body.linearDamping = 0.01;
     world.addBody(body);
 
-    projectiles.push({ mesh, body, age: 0 });
+    const rec = { mesh, body, age: 0 };
+    projectiles.push(rec);
+    projectileByBodyId.set(body.id, rec);
 
     debugLog('[SnowballBlitz] projectile spawned', {
         spawn: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
@@ -583,6 +653,8 @@ function removeProjectile(idx) {
     if (!p) return;
     scene.remove(p.mesh);
     world.removeBody(p.body);
+    projectileByBodyId.delete(p.body.id);
+    projectilesToRemove.delete(p.body.id);
     projectiles.splice(idx, 1);
 }
 
@@ -606,8 +678,14 @@ function updateProjectiles(dt) {
             continue;
         }
 
-        // Give a short grace period so firing downward doesn't instantly despawn
-        if (p.age > 0.15 && p.body.position.y <= projectileRadius * 0.5) {
+        // Removal driven by collision with world geometry
+        if (projectilesToRemove.has(p.body.id)) {
+            removeProjectile(i);
+            continue;
+        }
+
+        // Failsafe: if it somehow falls far below world, remove it
+        if (p.body.position.y < -10) {
             removeProjectile(i);
         }
     }
