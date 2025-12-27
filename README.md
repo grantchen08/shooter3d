@@ -8,6 +8,8 @@ A 3D arcade physics shooter game built with Three.js and cannon-es.
 shooter3d/
 ├── docs/              # Web app (GitHub Pages source)
 │   ├── index.html     # Main HTML entry point
+│   ├── config/
+│   │   └── game.json   # Gameplay tuning (gravity, projectile speed)
 │   ├── css/
 │   │   └── styles.css # Game styles
 │   ├── js/
@@ -48,6 +50,13 @@ If using VS Code, install the "Live Server" extension and right-click `index.htm
 
 - Modern web browser with WebGL support (Chrome, Firefox, Safari, Edge)
 - Landscape orientation (game is designed for horizontal screens)
+
+## Configuration
+
+Gameplay tuning lives in `docs/config/game.json`:
+
+- `projectile.initialSpeed`: initial projectile speed
+- `physics.gravity`: gravity vector `{x,y,z}` (also used for trajectory prediction)
 
 ## Testing notes
 

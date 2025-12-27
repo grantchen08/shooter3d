@@ -43,7 +43,7 @@ const rotationSpeed = 0.005; // Sensitivity for camera rotation
 // Projectiles
 const projectiles = []; // { mesh: THREE.Mesh, body: CANNON.Body, age: number }
 const projectileRadius = 0.15;
-const projectileSpeed = 18; // fixed launch speed
+let projectileSpeed = 18; // configurable (see docs/config/game.json)
 const projectileMaxAgeSec = 8;
 
 // Platforms & targets
@@ -87,6 +87,58 @@ const sfx = createSfx({ masterVolume: 0.55, debug: (m, d) => debugLog(m, d) });
 // UI/HUD
 const ui = createUI({ debug: (m, d) => debugLog(m, d) });
 
+// Config (loaded from docs/config/game.json)
+const DEFAULT_GAME_CONFIG = {
+    projectile: { initialSpeed: 18 },
+    physics: { gravity: { x: 0, y: -9.8, z: 0 } },
+};
+let gameConfig = DEFAULT_GAME_CONFIG;
+let gravity = new CANNON.Vec3(0, -9.8, 0); // configurable
+
+function isFiniteNumber(n) {
+    return typeof n === 'number' && Number.isFinite(n);
+}
+
+function applyGameConfig(cfg) {
+    const next = cfg || DEFAULT_GAME_CONFIG;
+
+    const speed = next?.projectile?.initialSpeed;
+    if (isFiniteNumber(speed) && speed > 0) projectileSpeed = speed;
+
+    const gx = next?.physics?.gravity?.x;
+    const gy = next?.physics?.gravity?.y;
+    const gz = next?.physics?.gravity?.z;
+    if (isFiniteNumber(gx) && isFiniteNumber(gy) && isFiniteNumber(gz)) {
+        gravity = new CANNON.Vec3(gx, gy, gz);
+    }
+
+    debugLog('[SnowballBlitz] config applied', {
+        projectileSpeed,
+        gravity: { x: gravity.x, y: gravity.y, z: gravity.z },
+    });
+}
+
+async function loadGameConfig() {
+    // Fetch is relative to docs/index.html (base URL), so this works on GitHub Pages too.
+    const url = 'config/game.json';
+    try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        gameConfig = json;
+        applyGameConfig(gameConfig);
+        return gameConfig;
+    } catch (err) {
+        debugLog('[SnowballBlitz] WARN: failed to load config, using defaults', {
+            url,
+            error: err && err.message ? err.message : String(err),
+        });
+        gameConfig = DEFAULT_GAME_CONFIG;
+        applyGameConfig(gameConfig);
+        return gameConfig;
+    }
+}
+
 // Lightweight debug helper (console + on-screen line)
 let debugEl = null;
 const DEBUG =
@@ -126,7 +178,7 @@ function showErrorOverlay(title, details) {
 }
 
 // Initialize the game
-function init() {
+async function init() {
     if (!WebGL.isWebGLAvailable()) {
         showErrorOverlay(
             'WebGL not available',
@@ -136,6 +188,9 @@ function init() {
     }
 
     debugLog('[SnowballBlitz] init() starting');
+
+    // Load config early so physics + trajectory match.
+    await loadGameConfig();
 
     // Create Three.js scene
     scene = new THREE.Scene();
@@ -312,7 +367,7 @@ function createEnvironment() {
 function setupPhysics() {
     // Create cannon-es physics world
     world = new CANNON.World();
-    world.gravity.set(0, -9.8, 0); // Standard gravity
+    world.gravity.set(gravity.x, gravity.y, gravity.z);
     world.allowSleep = true;
     
     // Create ground physics body
@@ -471,7 +526,7 @@ function spawnSnowExplosion(worldPos) {
 }
 
 function updateParticleBursts(dt) {
-    const g = -9.8;
+    const g = gravity.y;
     for (let i = particleBursts.length - 1; i >= 0; i--) {
         const b = particleBursts[i];
         b.age += dt;
@@ -752,7 +807,7 @@ function updateTrajectoryLine() {
     const dir = getAimDirection();
     const p0 = getProjectileSpawnPosition(dir);
     const v0 = dir.clone().multiplyScalar(projectileSpeed);
-    const g = new THREE.Vector3(0, -9.8, 0);
+    const g = new THREE.Vector3(gravity.x, gravity.y, gravity.z);
 
     // Build points until we hit the ground (y <= projectileRadius) or max time
     trajectoryPoints.length = 0;
@@ -1015,4 +1070,12 @@ function animate() {
 }
 
 // Start the game when page loads
-window.addEventListener('load', init);
+window.addEventListener('load', () => {
+    init().catch((err) => {
+        console.error(err);
+        showErrorOverlay(
+            'Failed to initialize',
+            err && err.message ? err.message : String(err)
+        );
+    });
+});
