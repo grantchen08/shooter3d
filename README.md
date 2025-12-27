@@ -51,13 +51,14 @@ If using VS Code, install the "Live Server" extension and right-click `index.htm
 
 - **GitHub Pages caching**: if you don’t see the latest changes, do a hard refresh (`Ctrl+Shift+R`) or use a private window.
 - **Debug mode**: open the game with `?debug=1` to enable extra logs and the on-screen debug line.
+- **Audio**: browsers require a user gesture to start WebAudio; sound effects will begin after your first interaction (tap/click/drag/key press).
 - **WebGL issues**:
   - Chrome/Chromium: check `chrome://gpu` and ensure hardware acceleration is enabled
   - Try Firefox if Chromium fails to create a WebGL context on Linux
 
 ## Current Status
 
-Prototype includes: aim drag, projectile physics + trajectory, targets + scoring, timer/win/lose, and basic effects.
+Prototype includes: aim drag, projectile physics + trajectory, targets + scoring, timer/win/lose, basic effects, and WebAudio SFX (shoot + snow explosion).
 
 ## Next Steps
 
