@@ -8,6 +8,7 @@
  */
 
 const DEFAULT_STORAGE_KEY = 'snowballblitz:tuning';
+const DEFAULT_PANEL_STORAGE_SUFFIX = ':panel';
 
 function safeParseJSON(text) {
     try {
@@ -85,6 +86,34 @@ function injectStylesOnce() {
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
         box-shadow: 0 14px 30px rgba(0,0,0,0.45);
       }
+      .tuning-panel .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+        cursor: grab;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .tuning-panel.dragging .header {
+        cursor: grabbing;
+      }
+      .tuning-panel .title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .tuning-panel .handle {
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        background:
+          radial-gradient(circle at 2px 2px, rgba(255,255,255,0.55) 1px, transparent 1.5px) 0 0 / 6px 6px;
+        opacity: 0.9;
+        flex: 0 0 auto;
+      }
       .tuning-panel .row {
         display: flex;
         align-items: center;
@@ -92,7 +121,7 @@ function injectStylesOnce() {
         margin: 8px 0;
       }
       .tuning-panel h3 {
-        margin: 0 0 6px 0;
+        margin: 0;
         font-size: 14px;
         letter-spacing: 0.2px;
       }
@@ -112,6 +141,16 @@ function injectStylesOnce() {
       }
       .tuning-panel input[type="number"]:focus {
         border-color: rgba(255, 255, 255, 0.35);
+      }
+      .tuning-panel .tuning-body {
+        display: block;
+      }
+      .tuning-panel.collapsed {
+        width: min(220px, calc(100% - 24px));
+        padding-bottom: 8px;
+      }
+      .tuning-panel.collapsed .tuning-body {
+        display: none;
       }
       .tuning-panel .btns {
         display: flex;
@@ -134,6 +173,11 @@ function injectStylesOnce() {
         background: rgba(255,255,255,0.10);
         color: #fff;
         border: 1px solid rgba(255,255,255,0.18);
+      }
+      .tuning-panel button.icon {
+        padding: 6px 8px;
+        border-radius: 10px;
+        line-height: 1;
       }
       .tuning-panel .json {
         width: 100%;
@@ -185,37 +229,52 @@ export function createTuningPanel({
     };
 
     const container = parent || document.getElementById('game-container') || document.body;
+    const panelStorageKey = `${storageKey}${DEFAULT_PANEL_STORAGE_SUFFIX}`;
     const panel = document.createElement('div');
     panel.className = 'tuning-panel';
     panel.innerHTML = `
-      <h3>Debug tuning</h3>
-      <div class="row">
-        <label for="tune-speed">Projectile speed</label>
-        <input id="tune-speed" type="number" step="0.1" min="0.1" />
+      <div class="header" id="tune-header">
+        <div class="title">
+          <div class="handle" aria-hidden="true"></div>
+          <h3>Debug tuning</h3>
+        </div>
+        <div class="header-actions">
+          <button type="button" id="tune-collapse" class="secondary icon" aria-label="Collapse/expand">▾</button>
+          <button type="button" id="tune-close" class="secondary icon" aria-label="Close">✕</button>
+        </div>
       </div>
-      <div class="row">
-        <label for="tune-gx">Gravity X</label>
-        <input id="tune-gx" type="number" step="0.1" />
+      <div class="tuning-body" id="tune-body">
+        <div class="row">
+          <label for="tune-speed">Projectile speed</label>
+          <input id="tune-speed" type="number" step="0.1" min="0.1" />
+        </div>
+        <div class="row">
+          <label for="tune-gx">Gravity X</label>
+          <input id="tune-gx" type="number" step="0.1" />
+        </div>
+        <div class="row">
+          <label for="tune-gy">Gravity Y</label>
+          <input id="tune-gy" type="number" step="0.1" />
+        </div>
+        <div class="row">
+          <label for="tune-gz">Gravity Z</label>
+          <input id="tune-gz" type="number" step="0.1" />
+        </div>
+        <div class="btns">
+          <button type="button" id="tune-copy">Copy JSON</button>
+          <button type="button" id="tune-download" class="secondary">Download game.json</button>
+          <button type="button" id="tune-reset-file" class="secondary">Reset to file</button>
+          <button type="button" id="tune-reset-defaults" class="secondary">Reset defaults</button>
+        </div>
+        <textarea class="json" id="tune-json" spellcheck="false" readonly></textarea>
+        <div class="status" id="tune-status"></div>
       </div>
-      <div class="row">
-        <label for="tune-gy">Gravity Y</label>
-        <input id="tune-gy" type="number" step="0.1" />
-      </div>
-      <div class="row">
-        <label for="tune-gz">Gravity Z</label>
-        <input id="tune-gz" type="number" step="0.1" />
-      </div>
-      <div class="btns">
-        <button type="button" id="tune-copy">Copy JSON</button>
-        <button type="button" id="tune-download" class="secondary">Download game.json</button>
-        <button type="button" id="tune-reset-file" class="secondary">Reset to file</button>
-        <button type="button" id="tune-reset-defaults" class="secondary">Reset defaults</button>
-      </div>
-      <textarea class="json" id="tune-json" spellcheck="false" readonly></textarea>
-      <div class="status" id="tune-status"></div>
     `;
     container.appendChild(panel);
 
+    const header = panel.querySelector('#tune-header');
+    const btnCollapse = panel.querySelector('#tune-collapse');
+    const btnClose = panel.querySelector('#tune-close');
     const elSpeed = panel.querySelector('#tune-speed');
     const elGx = panel.querySelector('#tune-gx');
     const elGy = panel.querySelector('#tune-gy');
@@ -256,6 +315,26 @@ export function createTuningPanel({
         }
     };
 
+    const persistPanelState = (state) => {
+        try {
+            localStorage.setItem(panelStorageKey, JSON.stringify(state));
+        } catch {
+            // ignore
+        }
+    };
+
+    const loadPanelState = () => {
+        try {
+            const raw = localStorage.getItem(panelStorageKey);
+            if (!raw) return null;
+            const parsed = safeParseJSON(raw);
+            if (!parsed.ok) return null;
+            return parsed.value;
+        } catch {
+            return null;
+        }
+    };
+
     const tryLoadPersisted = () => {
         try {
             const raw = localStorage.getItem(storageKey);
@@ -290,10 +369,129 @@ export function createTuningPanel({
     }
     render(getConfig());
 
+    // Panel UI state: collapsed + position (persisted)
+    const panelState = loadPanelState();
+    const defaultCollapsed = panelState && typeof panelState.collapsed === 'boolean' ? panelState.collapsed : true;
+    if (defaultCollapsed) panel.classList.add('collapsed');
+    btnCollapse.textContent = panel.classList.contains('collapsed') ? '▸' : '▾';
+
+    if (panelState && panelState.pos && Number.isFinite(panelState.pos.left) && Number.isFinite(panelState.pos.top)) {
+        // Convert to container-local coords and clamp.
+        const rect = container.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const maxLeft = Math.max(0, rect.width - panelRect.width);
+        const maxTop = Math.max(0, rect.height - panelRect.height);
+        const left = clampNumber(panelState.pos.left, { min: 0, max: maxLeft });
+        const top = clampNumber(panelState.pos.top, { min: 0, max: maxTop });
+        panel.style.left = `${left}px`;
+        panel.style.top = `${top}px`;
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+    }
+
     elSpeed.addEventListener('input', scheduleApply);
     elGx.addEventListener('input', scheduleApply);
     elGy.addEventListener('input', scheduleApply);
     elGz.addEventListener('input', scheduleApply);
+
+    const toggleCollapsed = () => {
+        panel.classList.toggle('collapsed');
+        btnCollapse.textContent = panel.classList.contains('collapsed') ? '▸' : '▾';
+        persistPanelState({
+            ...(loadPanelState() || {}),
+            collapsed: panel.classList.contains('collapsed'),
+        });
+    };
+
+    btnCollapse.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleCollapsed();
+    });
+
+    btnClose.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        panel.remove();
+    });
+
+    // Dragging: pointer drag the header (not the buttons).
+    let dragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    const isClickOnHeaderButton = (event) => {
+        const t = event.target;
+        return !!(t && (t.closest && t.closest('button')));
+    };
+
+    header.addEventListener('pointerdown', (event) => {
+        if (isClickOnHeaderButton(event)) return;
+        // Left mouse button or touch/pen (buttons===0 in pointer events for touch)
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        dragging = true;
+        panel.classList.add('dragging');
+
+        const panelRect = panel.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        dragOffsetX = event.clientX - panelRect.left;
+        dragOffsetY = event.clientY - panelRect.top;
+
+        // Switch to left/top positioning if not already.
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+        panel.style.left = `${panelRect.left - containerRect.left}px`;
+        panel.style.top = `${panelRect.top - containerRect.top}px`;
+
+        try {
+            header.setPointerCapture(event.pointerId);
+        } catch {
+            // ignore
+        }
+    });
+
+    header.addEventListener('pointermove', (event) => {
+        if (!dragging) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const containerRect = container.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+
+        const desiredLeft = event.clientX - containerRect.left - dragOffsetX;
+        const desiredTop = event.clientY - containerRect.top - dragOffsetY;
+
+        const maxLeft = Math.max(0, containerRect.width - panelRect.width);
+        const maxTop = Math.max(0, containerRect.height - panelRect.height);
+
+        const left = clampNumber(desiredLeft, { min: 0, max: maxLeft });
+        const top = clampNumber(desiredTop, { min: 0, max: maxTop });
+
+        panel.style.left = `${left}px`;
+        panel.style.top = `${top}px`;
+    });
+
+    const endDrag = () => {
+        if (!dragging) return;
+        dragging = false;
+        panel.classList.remove('dragging');
+
+        const left = Number.parseFloat(panel.style.left || '0');
+        const top = Number.parseFloat(panel.style.top || '0');
+        if (Number.isFinite(left) && Number.isFinite(top)) {
+            persistPanelState({
+                ...(loadPanelState() || {}),
+                pos: { left, top },
+                collapsed: panel.classList.contains('collapsed'),
+            });
+        }
+    };
+
+    header.addEventListener('pointerup', endDrag);
+    header.addEventListener('pointercancel', endDrag);
 
     panel.querySelector('#tune-copy').addEventListener('click', async () => {
         const json = prettyJSON(getConfig());
