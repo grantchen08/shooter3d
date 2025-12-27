@@ -6,6 +6,8 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import WebGL from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/capabilities/WebGL.js';
 import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+import { createSfx } from './audio.js';
+import { createUI } from './ui.js';
 
 // Scene setup
 let scene, camera, renderer;
@@ -48,24 +50,14 @@ const projectileMaxAgeSec = 8;
 const platforms = []; // { mesh: THREE.Mesh, body: CANNON.Body }
 const targets = []; // { mesh: THREE.Group, body: CANNON.Body, alive: boolean }
 
-// Score + HUD
-let score = 0;
-let scoreValueEl = null;
+// UI
 const SCORE_PER_TARGET = 50;
 
 // Timer + game state
 const TIME_LIMIT_SEC = 60;
 let timeRemainingSec = TIME_LIMIT_SEC;
-let timerValueEl = null;
-let timerEl = null;
 let fireButtonEl = null;
 let gameState = 'playing'; // 'playing' | 'ended'
-let endOverlayEl = null;
-let endScoreEl = null;
-let endTitleEl = null;
-
-// Floating combat text
-const floatingTexts = []; // { el: HTMLElement, worldPos: THREE.Vector3, age: number, duration: number }
 
 // Particle bursts (snow explosion)
 const particleBursts = []; // { points, geom, positions, velocities, age, duration, material }
@@ -89,178 +81,11 @@ const trajectoryPoints = []; // array of THREE.Vector3 reused each update
 const trajectoryMaxTimeSec = 3.0;
 const trajectoryTimeStepSec = 0.08;
 
-// ------------------------------------------------------------
-// Audio (SFX) - lightweight WebAudio (no external assets)
-// Browsers require a user gesture to start audio; we "unlock" on first input.
-// ------------------------------------------------------------
-let audioCtx = null;
-let audioMasterGain = null;
-let audioUnlocked = false;
-const SFX_ENABLED = true;
-const SFX_MASTER_VOLUME = 0.55;
+// Audio SFX (asset-free)
+const sfx = createSfx({ masterVolume: 0.55, debug: (m, d) => debugLog(m, d) });
 
-function getAudioContext() {
-    if (audioCtx) return audioCtx;
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return null;
-    audioCtx = new Ctx();
-    audioMasterGain = audioCtx.createGain();
-    audioMasterGain.gain.value = SFX_MASTER_VOLUME;
-    audioMasterGain.connect(audioCtx.destination);
-    return audioCtx;
-}
-
-async function unlockAudio() {
-    if (!SFX_ENABLED || audioUnlocked) return;
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    try {
-        if (ctx.state !== 'running') await ctx.resume();
-        audioUnlocked = ctx.state === 'running';
-        if (audioUnlocked) debugLog('[SnowballBlitz] audio unlocked');
-    } catch {
-        // Ignore: might not qualify as a gesture in some browsers.
-    }
-}
-
-function clamp(v, lo, hi) {
-    return Math.max(lo, Math.min(hi, v));
-}
-
-function makeSfxOut(worldPos) {
-    // Optional stereo panning (cheap spatial cue).
-    const ctx = getAudioContext();
-    if (!ctx || !audioMasterGain) return { out: null, cleanup: () => {} };
-
-    let out = audioMasterGain;
-    let cleanup = () => {};
-    try {
-        if (typeof StereoPannerNode !== 'undefined') {
-            const p = ctx.createStereoPanner();
-            const pan = worldPos ? clamp(worldPos.x / 10, -1, 1) : 0;
-            p.pan.value = pan;
-            p.connect(audioMasterGain);
-            out = p;
-            cleanup = () => {
-                try { p.disconnect(); } catch {}
-            };
-        }
-    } catch {
-        out = audioMasterGain;
-    }
-    return { out, cleanup };
-}
-
-function playShootSfx() {
-    if (!SFX_ENABLED) return;
-    const ctx = getAudioContext();
-    if (!ctx || !audioMasterGain || ctx.state !== 'running') return;
-
-    const now = ctx.currentTime;
-    const { out, cleanup: cleanupOut } = makeSfxOut(null);
-    const target = out || audioMasterGain;
-
-    // Short "pop" with a quick pitch drop
-    const osc = ctx.createOscillator();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(520, now);
-    osc.frequency.exponentialRampToValueAtTime(220, now + 0.09);
-
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.35, now + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
-
-    // Tiny noise click for crispness
-    const noiseDur = 0.02;
-    const noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * noiseDur), ctx.sampleRate);
-    const data = noiseBuf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-    const noise = ctx.createBufferSource();
-    noise.buffer = noiseBuf;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.18, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + noiseDur);
-
-    osc.connect(gain);
-    gain.connect(target);
-    noise.connect(noiseGain);
-    noiseGain.connect(target);
-
-    osc.start(now);
-    osc.stop(now + 0.13);
-    noise.start(now);
-    noise.stop(now + noiseDur + 0.01);
-
-    osc.onended = () => {
-        try { osc.disconnect(); } catch {}
-        try { gain.disconnect(); } catch {}
-        try { noise.disconnect(); } catch {}
-        try { noiseGain.disconnect(); } catch {}
-        cleanupOut();
-    };
-}
-
-function playExplosionSfx(worldPos) {
-    if (!SFX_ENABLED) return;
-    const ctx = getAudioContext();
-    if (!ctx || !audioMasterGain || ctx.state !== 'running') return;
-
-    const now = ctx.currentTime;
-    const { out, cleanup: cleanupOut } = makeSfxOut(worldPos);
-    const target = out || audioMasterGain;
-
-    // Noise burst shaped through a bandpass + envelope
-    const dur = 0.28;
-    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) {
-        const t = i / d.length;
-        d[i] = (Math.random() * 2 - 1) * (1 - t) * 0.9;
-    }
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(900, now);
-    bp.Q.setValueAtTime(0.9, now);
-
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.55, now + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-
-    // Low "thump" layer
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(120, now);
-    osc.frequency.exponentialRampToValueAtTime(55, now + 0.18);
-    const thumpGain = ctx.createGain();
-    thumpGain.gain.setValueAtTime(0.0001, now);
-    thumpGain.gain.exponentialRampToValueAtTime(0.25, now + 0.008);
-    thumpGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-
-    src.connect(bp);
-    bp.connect(gain);
-    gain.connect(target);
-    osc.connect(thumpGain);
-    thumpGain.connect(target);
-
-    src.start(now);
-    src.stop(now + dur + 0.02);
-    osc.start(now);
-    osc.stop(now + 0.24);
-
-    src.onended = () => {
-        try { src.disconnect(); } catch {}
-        try { bp.disconnect(); } catch {}
-        try { gain.disconnect(); } catch {}
-        try { osc.disconnect(); } catch {}
-        try { thumpGain.disconnect(); } catch {}
-        cleanupOut();
-    };
-}
+// UI/HUD
+const ui = createUI({ debug: (m, d) => debugLog(m, d) });
 
 // Lightweight debug helper (console + on-screen line)
 let debugEl = null;
@@ -319,6 +144,7 @@ function init() {
     // Create camera (perspective camera for 3D)
     const aspect = window.innerWidth / window.innerHeight;
     camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+    ui.setCamera(camera);
     
     // Create player character
     createPlayer();
@@ -371,8 +197,8 @@ function init() {
     // Trajectory line
     setupTrajectoryLine();
 
-    // HUD
-    setupHud();
+    // HUD + overlay
+    ui.init({ timeLimitSec: TIME_LIMIT_SEC, onRestart: resetGame });
 
     // On-screen debug line (only with ?debug=1)
     if (DEBUG) {
@@ -400,83 +226,14 @@ function init() {
     animate();
 }
 
-function setupHud() {
-    scoreValueEl = document.getElementById('hud-score-value');
-    debugLog('[SnowballBlitz] setupHud()', { foundScoreEl: !!scoreValueEl });
-    setScore(0);
-
-    timerEl = document.getElementById('hud-timer');
-    timerValueEl = document.getElementById('hud-timer-value');
-    setTimeRemaining(TIME_LIMIT_SEC);
-
-    // Create end overlay UI (hidden until time runs out)
-    setupEndOverlay();
-}
-
-function setScore(value) {
-    score = value;
-    // Lazy lookup in case DOM changed / element wasn't found at init time.
-    if (!scoreValueEl) scoreValueEl = document.getElementById('hud-score-value');
-    if (scoreValueEl) {
-        scoreValueEl.textContent = String(score);
-    } else {
-        debugLog('[SnowballBlitz] WARN: score element missing');
-    }
-}
-
-function addScore(delta) {
-    debugLog('[SnowballBlitz] addScore()', { delta, before: score, after: score + delta });
-    setScore(score + delta);
-}
-
-function formatTimeMMSS(seconds) {
-    const s = Math.max(0, Math.ceil(seconds));
-    const mm = Math.floor(s / 60);
-    const ss = s % 60;
-    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-}
-
-function setTimeRemaining(seconds) {
-    timeRemainingSec = seconds;
-    if (timerValueEl) timerValueEl.textContent = formatTimeMMSS(timeRemainingSec);
-    if (timerEl) {
-        if (timeRemainingSec <= 10 && gameState === 'playing') timerEl.classList.add('hud-timer-low');
-        else timerEl.classList.remove('hud-timer-low');
-    }
-}
-
-function setupEndOverlay() {
-    const overlay = document.getElementById('ui-overlay');
-    if (!overlay) return;
-
-    endOverlayEl = document.createElement('div');
-    endOverlayEl.className = 'end-overlay';
-    endOverlayEl.innerHTML = `
-        <div class="panel">
-            <h2 id="end-title">Time’s up!</h2>
-            <div class="final-score">Score: <span id="end-score">0</span></div>
-            <button type="button" id="restart-button">Restart</button>
-        </div>
-    `;
-    overlay.appendChild(endOverlayEl);
-    endTitleEl = endOverlayEl.querySelector('#end-title');
-    endScoreEl = endOverlayEl.querySelector('#end-score');
-    const restartBtn = endOverlayEl.querySelector('#restart-button');
-    restartBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        resetGame();
-    });
-}
-
 function endGame(reason) {
     if (gameState === 'ended') return;
     gameState = 'ended';
-    setTimeRemaining(0);
+    timeRemainingSec = 0;
+    ui.updateTimer(0, gameState);
     if (fireButtonEl) fireButtonEl.disabled = true;
-    if (endTitleEl) endTitleEl.textContent = reason === 'win' ? 'You win!' : 'Time’s up!';
-    if (endScoreEl) endScoreEl.textContent = String(score);
-    if (endOverlayEl) endOverlayEl.style.display = 'flex';
-    debugLog('[SnowballBlitz] game ended', { reason, score });
+    ui.showEnd({ reason, finalScore: ui.getScore() });
+    debugLog('[SnowballBlitz] game ended', { reason, score: ui.getScore() });
 }
 
 function resetGame() {
@@ -497,11 +254,12 @@ function resetGame() {
     createTargets();
 
     // Reset score/time/state
-    setScore(0);
+    ui.setScore(0);
     gameState = 'playing';
-    setTimeRemaining(TIME_LIMIT_SEC);
+    timeRemainingSec = TIME_LIMIT_SEC;
+    ui.updateTimer(timeRemainingSec, gameState);
     if (fireButtonEl) fireButtonEl.disabled = false;
-    if (endOverlayEl) endOverlayEl.style.display = 'none';
+    ui.hideEnd();
 
     debugLog('[SnowballBlitz] game reset');
 }
@@ -643,9 +401,9 @@ function destroyTarget(target) {
 
     // Spawn floating score text at target position (use mesh position; it's at platform surface)
     const fxPos = target.mesh.position.clone().add(new THREE.Vector3(0, 1.0, 0));
-    spawnFloatingText(`+${SCORE_PER_TARGET}`, fxPos);
+    ui.spawnFloatingText(`+${SCORE_PER_TARGET}`, fxPos);
     spawnSnowExplosion(fxPos);
-    addScore(SCORE_PER_TARGET);
+    ui.addScore(SCORE_PER_TARGET);
 
     scene.remove(target.mesh);
     world.removeBody(target.body);
@@ -663,7 +421,7 @@ function destroyTarget(target) {
 
 function spawnSnowExplosion(worldPos) {
     // SFX (explosion)
-    playExplosionSfx(worldPos);
+    sfx.playExplosion(worldPos);
 
     // Small, cheap particle burst (no textures)
     const count = 60;
@@ -739,58 +497,6 @@ function updateParticleBursts(dt) {
             b.geom.dispose();
             b.material.dispose();
             particleBursts.splice(i, 1);
-        }
-    }
-}
-
-function worldToScreen(posWorld) {
-    // Returns pixel coords relative to viewport
-    const v = posWorld.clone().project(camera);
-    const x = (v.x * 0.5 + 0.5) * window.innerWidth;
-    const y = (-v.y * 0.5 + 0.5) * window.innerHeight;
-    return { x, y, z: v.z };
-}
-
-function spawnFloatingText(text, worldPos) {
-    const overlay = document.getElementById('ui-overlay');
-    if (!overlay) return;
-
-    const el = document.createElement('div');
-    el.className = 'floating-text';
-    el.textContent = text;
-    overlay.appendChild(el);
-
-    floatingTexts.push({
-        el,
-        worldPos,
-        age: 0,
-        duration: 0.9,
-    });
-}
-
-function updateFloatingTexts(dt) {
-    for (let i = floatingTexts.length - 1; i >= 0; i--) {
-        const ft = floatingTexts[i];
-        ft.age += dt;
-
-        const t = Math.min(ft.age / ft.duration, 1);
-        const rise = 28 * t; // pixels
-        const fade = 1 - t;
-
-        const { x, y, z } = worldToScreen(ft.worldPos);
-
-        // Hide if behind camera
-        if (z > 1) {
-            ft.el.style.opacity = '0';
-            ft.el.style.transform = 'translate(-9999px, -9999px)';
-        } else {
-            ft.el.style.opacity = String(fade);
-            ft.el.style.transform = `translate(${x}px, ${y - rise}px) translate(-50%, -50%)`;
-        }
-
-        if (ft.age >= ft.duration) {
-            ft.el.remove();
-            floatingTexts.splice(i, 1);
         }
     }
 }
@@ -921,7 +627,7 @@ function setupFireButton() {
         // Avoid triggering canvas drag/scroll; make firing feel instant.
         event.preventDefault();
         event.stopPropagation();
-        unlockAudio();
+        sfx.unlock();
         button.classList.add('pressed');
         debugLog('[SnowballBlitz] fire button -> fireProjectile()');
         fireProjectile();
@@ -969,7 +675,7 @@ function setupFireInputHandlers() {
 
     // Keyboard: Space fires a projectile (desktop-friendly for now)
     document.addEventListener('keydown', (event) => {
-        unlockAudio();
+        sfx.unlock();
 
         // QoL: restart hotkey
         if (!event.repeat && event.code === 'KeyR') {
@@ -1113,7 +819,7 @@ function fireProjectile() {
     }
 
     // SFX (only when a shot actually fires)
-    playShootSfx();
+    sfx.playShoot();
 
     // Direction: aim forward (from player outward)
     const dir = getAimDirection();
@@ -1205,7 +911,7 @@ function updateProjectiles(dt) {
 }
 
 function onMouseDown(event) {
-    unlockAudio();
+    sfx.unlock();
     isDragging = true;
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
@@ -1236,7 +942,7 @@ function onMouseUp(event) {
 
 function onTouchStart(event) {
     if (event.touches.length === 1) {
-        unlockAudio();
+        sfx.unlock();
         isDragging = true;
         lastTouchX = event.touches[0].clientX;
         lastTouchY = event.touches[0].clientY;
@@ -1281,7 +987,7 @@ function animate() {
     updateTrajectoryLine();
 
     // Update floating combat text
-    updateFloatingTexts(dt);
+    ui.updateFloatingTexts(dt);
 
     // Update particle effects
     updateParticleBursts(dt);
@@ -1299,12 +1005,8 @@ function animate() {
         if (timeRemainingSec <= 0) {
             endGame('timeout');
         } else {
-            // Update timer display (smooth)
-            if (timerValueEl) timerValueEl.textContent = formatTimeMMSS(timeRemainingSec);
-            if (timerEl) {
-                if (timeRemainingSec <= 10) timerEl.classList.add('hud-timer-low');
-                else timerEl.classList.remove('hud-timer-low');
-            }
+            // Update timer display (smooth-ish: rounded)
+            ui.updateTimer(timeRemainingSec, gameState);
         }
     }
     

@@ -11,7 +11,9 @@ shooter3d/
 │   ├── css/
 │   │   └── styles.css # Game styles
 │   ├── js/
-│   │   └── main.js    # Main game logic
+│   │   ├── main.js    # Game entry point / orchestration
+│   │   ├── audio.js   # WebAudio SFX helpers (asset-free)
+│   │   └── ui.js      # HUD + overlays + floating text
 │   └── assets/        # Game assets (models, textures, etc.)
 └── doc/
     ├── GameDesign.md         # Game design document
