@@ -15,6 +15,7 @@ shooter3d/
 │   ├── js/
 │   │   ├── main.js    # Game entry point / orchestration
 │   │   ├── audio.js   # WebAudio SFX helpers (asset-free)
+│   │   ├── tuning.js  # Debug tuning panel (live tweak + export JSON)
 │   │   └── ui.js      # HUD + overlays + floating text
 │   └── assets/        # Game assets (models, textures, etc.)
 └── doc/
@@ -62,6 +63,7 @@ Gameplay tuning lives in `docs/config/game.json`:
 
 - **GitHub Pages caching**: if you don’t see the latest changes, do a hard refresh (`Ctrl+Shift+R`) or use a private window.
 - **Debug mode**: open the game with `?debug=1` to enable extra logs and the on-screen debug line.
+- **Debug tuning panel** (only in `?debug=1`): live-edit gravity + projectile speed and use **Copy JSON** / **Download game.json** to export the current values. Values are saved in your browser via `localStorage`.
 - **Audio**: browsers require a user gesture to start WebAudio; sound effects will begin after your first interaction (tap/click/drag/key press).
 - **WebGL issues**:
   - Chrome/Chromium: check `chrome://gpu` and ensure hardware acceleration is enabled

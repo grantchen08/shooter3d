@@ -8,6 +8,7 @@ import WebGL from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/capab
 import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
 import { createSfx } from './audio.js';
 import { createUI } from './ui.js';
+import { createTuningPanel } from './tuning.js';
 
 // Scene setup
 let scene, camera, renderer;
@@ -112,10 +113,26 @@ function applyGameConfig(cfg) {
         gravity = new CANNON.Vec3(gx, gy, gz);
     }
 
+    // If physics world already exists, apply live.
+    if (world) {
+        world.gravity.set(gravity.x, gravity.y, gravity.z);
+    }
+
     debugLog('[SnowballBlitz] config applied', {
         projectileSpeed,
         gravity: { x: gravity.x, y: gravity.y, z: gravity.z },
     });
+}
+
+function getLiveGameConfig() {
+    return {
+        projectile: { initialSpeed: projectileSpeed },
+        physics: { gravity: { x: gravity.x, y: gravity.y, z: gravity.z } },
+    };
+}
+
+function setLiveGameConfig(cfg) {
+    applyGameConfig(cfg);
 }
 
 async function loadGameConfig() {
@@ -270,6 +287,18 @@ async function init() {
         debugEl.style.pointerEvents = 'none';
         debugEl.textContent = 'Debug: ready';
         uiOverlay.appendChild(debugEl);
+    }
+
+    // Debug tuning panel (only with ?debug=1)
+    if (DEBUG) {
+        createTuningPanel({
+            enabled: true,
+            getConfig: getLiveGameConfig,
+            setConfig: setLiveGameConfig,
+            defaultConfig: DEFAULT_GAME_CONFIG,
+            fileConfig: gameConfig,
+            debug: (m, d) => debugLog(m, d),
+        });
     }
 
     // Fire button UI (desktop + mobile)
