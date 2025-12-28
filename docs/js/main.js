@@ -99,7 +99,7 @@ function setupGlobalAudioUnlock() {
     const tryUnlock = (event) => {
         if (done) return;
         done = true;
-        try { sfx.unlock(); } catch {}
+        try { sfx.unlock({ force: true }); } catch {}
         try { bgm.unlock(); } catch {}
         // Remove listeners after first attempt.
         document.removeEventListener('pointerdown', tryUnlock, true);
@@ -1135,8 +1135,9 @@ function setupAudioMuteButtons() {
         // BGM
         try { bgm.setEnabled(!prefs.musicMuted); } catch {}
 
-        // SFX (WebAudio)
-        try { sfx.setEnabled(!prefs.sfxMuted); } catch {}
+        // SFX (WebAudio): keep enabled, mute via gain so unlock/resume still works reliably on iOS.
+        try { sfx.setEnabled(true); } catch {}
+        try { sfx.setMuted(!!prefs.sfxMuted); } catch {}
 
         btnMusic.classList.toggle('muted', prefs.musicMuted);
         btnMusic.setAttribute('aria-pressed', prefs.musicMuted ? 'true' : 'false');
@@ -1167,7 +1168,7 @@ function setupAudioMuteButtons() {
         apply();
         // If unmuting, try to unlock WebAudio from this gesture.
         if (!prefs.sfxMuted) {
-            try { sfx.unlock(); } catch {}
+            try { sfx.unlock({ force: true }); } catch {}
         }
     };
 

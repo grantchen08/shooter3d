@@ -10,6 +10,8 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
     let audioCtx = null;
     let audioMasterGain = null;
     let audioUnlocked = false;
+    let muted = false;
+    let pendingShootRetry = false;
 
     const log = (message, data) => {
         try {
@@ -28,7 +30,7 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
 
         audioCtx = new Ctx();
         audioMasterGain = audioCtx.createGain();
-        audioMasterGain.gain.value = masterVolume;
+        audioMasterGain.gain.value = muted ? 0 : masterVolume;
         audioMasterGain.connect(audioCtx.destination);
         return audioCtx;
     };
@@ -37,9 +39,14 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
         enabled = !!on;
     };
 
+    const setMuted = (on) => {
+        muted = !!on;
+        if (audioMasterGain) audioMasterGain.gain.value = muted ? 0 : masterVolume;
+    };
+
     const setMasterVolume = (v) => {
         masterVolume = clamp(Number(v), 0, 1);
-        if (audioMasterGain) audioMasterGain.gain.value = masterVolume;
+        if (audioMasterGain) audioMasterGain.gain.value = muted ? 0 : masterVolume;
     };
 
     const makeSfxOut = (worldPos) => {
@@ -66,8 +73,9 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
         return { out, cleanup };
     };
 
-    const unlock = async () => {
-        if (!enabled || audioUnlocked) return;
+    const unlock = async ({ force = false } = {}) => {
+        // Even if muted/disabled, unlocking the AudioContext early makes SFX more reliable on iOS.
+        if ((!enabled && !force) || audioUnlocked) return;
         const ctx = getAudioContext();
         if (!ctx) return;
         try {
@@ -80,9 +88,24 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
     };
 
     const playShoot = () => {
-        if (!enabled) return;
+        if (!enabled || muted) return;
         const ctx = getAudioContext();
-        if (!ctx || !audioMasterGain || ctx.state !== 'running') return;
+        if (!ctx || !audioMasterGain) return;
+        if (ctx.state !== 'running') {
+            // If called from a gesture and the context isn't running yet, try to resume and retry once.
+            if (!pendingShootRetry) {
+                pendingShootRetry = true;
+                unlock({ force: true }).finally(() => {
+                    pendingShootRetry = false;
+                    try {
+                        if (ctx.state === 'running') playShoot();
+                    } catch {
+                        // ignore
+                    }
+                });
+            }
+            return;
+        }
 
         const now = ctx.currentTime;
         const { out, cleanup: cleanupOut } = makeSfxOut(null);
@@ -130,7 +153,7 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
     };
 
     const playExplosion = (worldPos) => {
-        if (!enabled) return;
+        if (!enabled || muted) return;
         const ctx = getAudioContext();
         if (!ctx || !audioMasterGain || ctx.state !== 'running') return;
 
@@ -195,8 +218,10 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
         playShoot,
         playExplosion,
         setEnabled,
+        setMuted,
         setMasterVolume,
         get enabled() { return enabled; },
+        get muted() { return muted; },
         get masterVolume() { return masterVolume; },
     };
 }
