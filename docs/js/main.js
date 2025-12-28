@@ -948,6 +948,31 @@ function getFullscreenElement() {
     return document.fullscreenElement || document.webkitFullscreenElement || null;
 }
 
+function isIOSBrowser() {
+    const ua = navigator.userAgent || '';
+    // iPadOS 13+ reports as Mac; include touch heuristic.
+    const isAppleMobile = /iPad|iPhone|iPod/.test(ua);
+    const isIpadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints && navigator.maxTouchPoints > 1;
+    return isAppleMobile || isIpadOS;
+}
+
+function isStandaloneDisplayMode() {
+    // iOS Safari uses navigator.standalone; other browsers expose display-mode media query.
+    return (
+        (typeof navigator !== 'undefined' && navigator.standalone === true) ||
+        (typeof window !== 'undefined' &&
+            window.matchMedia &&
+            window.matchMedia('(display-mode: standalone)').matches)
+    );
+}
+
+function canUseFullscreenAPI(el) {
+    if (!el) return false;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    return !!(req && exit);
+}
+
 async function requestFullscreen(el) {
     if (!el) return false;
     const fn = el.requestFullscreen || el.webkitRequestFullscreen;
@@ -979,11 +1004,38 @@ function setupFullscreenButton() {
     const container = document.getElementById('game-container') || document.documentElement;
     if (!btn || !container) return;
 
+    const showUnsupportedHintOnce = () => {
+        const key = 'snowballblitz:fsHintShown';
+        try {
+            if (sessionStorage.getItem(key) === '1') return;
+            sessionStorage.setItem(key, '1');
+        } catch {
+            // ignore
+        }
+        // iOS Safari commonly does not support fullscreen for canvas; suggest PWA install.
+        const ios = isIOSBrowser();
+        const msg = ios
+            ? 'Fullscreen is not supported for web games on iPhone Safari.\n\nTip: use Share → "Add to Home Screen" to run it fullscreen-like.'
+            : 'Fullscreen is not supported in this browser.';
+        // Keep it simple; alerts work reliably on mobile.
+        try { alert(msg); } catch {}
+    };
+
     const sync = () => {
         const fs = !!getFullscreenElement();
         btn.classList.toggle('pressed', fs);
         btn.setAttribute('aria-pressed', fs ? 'true' : 'false');
-        btn.title = fs ? 'Exit fullscreen (F)' : 'Fullscreen (F)';
+        if (canUseFullscreenAPI(container)) {
+            btn.disabled = false;
+            btn.title = fs ? 'Exit fullscreen (F)' : 'Fullscreen (F)';
+        } else if (isStandaloneDisplayMode()) {
+            // Already fullscreen-like; button is not useful.
+            btn.disabled = true;
+            btn.title = 'Already in app mode';
+        } else {
+            btn.disabled = false; // keep clickable so we can show a hint
+            btn.title = isIOSBrowser() ? 'Fullscreen not supported on iPhone Safari' : 'Fullscreen not supported';
+        }
     };
 
     const toggle = async (event) => {
@@ -995,6 +1047,12 @@ function setupFullscreenButton() {
         // Also unlock audio on gesture
         try { sfx.unlock(); } catch {}
         try { bgm.unlock(); } catch {}
+
+        if (!canUseFullscreenAPI(container)) {
+            showUnsupportedHintOnce();
+            sync();
+            return;
+        }
 
         if (getFullscreenElement()) {
             await exitFullscreen();

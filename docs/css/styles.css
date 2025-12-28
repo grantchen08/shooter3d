@@ -158,6 +158,12 @@ html, body {
     outline-offset: 3px;
 }
 
+#fullscreen-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
 .end-overlay {
     position: absolute;
     inset: 0;
