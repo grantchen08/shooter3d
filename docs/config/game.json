@@ -10,12 +10,12 @@
     }
   },
   "camera": {
-    "distance": 8,
-    "height": 3,
-    "orbitPitchDeg": 18
+    "distance": 2.9,
+    "height": 1.4,
+    "orbitPitchDeg": 6
   },
   "targets": {
-    "minDistance": 10,
-    "maxDistance": 26
+    "minDistance": 5.2,
+    "maxDistance": 12.8
   }
 }
