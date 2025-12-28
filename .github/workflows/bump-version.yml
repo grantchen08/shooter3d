@@ -69,7 +69,20 @@ jobs:
           fi
           # Commit without modifying global git config
           VER="$(node -p \"require('fs').readFileSync('docs/js/version.js','utf8').match(/VERSION = '(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)'/)[1]\")"
-          git add docs/js/version.js
+          # Keep cache-busting query params in sync with VERSION
+          node - <<'NODE'
+          const fs = require('fs');
+          const ver = fs.readFileSync('docs/js/version.js', 'utf8').match(/VERSION = '(\d+\.\d+\.\d+)'/)[1];
+          const replace = (path, re, make) => {
+            const src = fs.readFileSync(path, 'utf8');
+            const out = src.replace(re, make(ver));
+            if (out !== src) fs.writeFileSync(path, out);
+          };
+          replace('docs/index.html', /src="js\/main\.js\?v=\d+\.\d+\.\d+"/, (v) => `src="js/main.js?v=${v}"`);
+          replace('docs/js/main.js', /from '\.\/version\.js\?v=\d+\.\d+\.\d+';/, (v) => `from './version.js?v=${v}';`);
+          NODE
+
+          git add docs/js/version.js docs/index.html docs/js/main.js
           git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' \
             commit -m "Bump version to ${VER}"
           git push
