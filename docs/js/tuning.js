@@ -420,6 +420,14 @@ export function createTuningPanel({
     };
 
     const render = (cfg) => {
+        const active = document.activeElement;
+        const setIfNotFocused = (el, value) => {
+            if (!el) return;
+            // Avoid breaking text entry on mobile by rewriting the value while typing.
+            if (active === el) return;
+            el.value = String(value);
+        };
+
         const speed = cfg?.projectile?.initialSpeed ?? 18;
         const g = cfg?.physics?.gravity ?? { x: 0, y: -9.8, z: 0 };
         const cam = cfg?.camera ?? { distance: 8, height: 3, orbitPitchDeg: 18 };
@@ -428,21 +436,21 @@ export function createTuningPanel({
         const playerCfg = cfg?.player ?? { height: 2 };
         const snowmanCfg = cfg?.snowman ?? { height: 1.2 };
         const trajCfg = cfg?.trajectory ?? { segmentLength: 0.35, maxPoints: 80 };
-        elSpeed.value = String(speed);
-        elGx.value = String(g.x ?? 0);
-        elGy.value = String(g.y ?? -9.8);
-        elGz.value = String(g.z ?? 0);
-        elCamDistance.value = String(cam.distance ?? 8);
-        elCamHeight.value = String(cam.height ?? 3);
-        elCamPitch.value = String(cam.orbitPitchDeg ?? 18);
-        elTargetMin.value = String(tgt.minDistance ?? 10);
-        elTargetMax.value = String(tgt.maxDistance ?? 26);
-        elBgmVol.value = String(aud.bgmVolume ?? 0.12);
-        elSfxVol.value = String(aud.sfxVolume ?? 0.55);
-        elPlayerHeight.value = String(playerCfg.height ?? 2);
-        elSnowmanHeight.value = String(snowmanCfg.height ?? 1.2);
-        elTrajSeg.value = String(trajCfg.segmentLength ?? 0.35);
-        elTrajMaxPts.value = String(trajCfg.maxPoints ?? 80);
+        setIfNotFocused(elSpeed, speed);
+        setIfNotFocused(elGx, g.x ?? 0);
+        setIfNotFocused(elGy, g.y ?? -9.8);
+        setIfNotFocused(elGz, g.z ?? 0);
+        setIfNotFocused(elCamDistance, cam.distance ?? 8);
+        setIfNotFocused(elCamHeight, cam.height ?? 3);
+        setIfNotFocused(elCamPitch, cam.orbitPitchDeg ?? 18);
+        setIfNotFocused(elTargetMin, tgt.minDistance ?? 10);
+        setIfNotFocused(elTargetMax, tgt.maxDistance ?? 26);
+        setIfNotFocused(elBgmVol, aud.bgmVolume ?? 0.12);
+        setIfNotFocused(elSfxVol, aud.sfxVolume ?? 0.55);
+        setIfNotFocused(elPlayerHeight, playerCfg.height ?? 2);
+        setIfNotFocused(elSnowmanHeight, snowmanCfg.height ?? 1.2);
+        setIfNotFocused(elTrajSeg, trajCfg.segmentLength ?? 0.35);
+        setIfNotFocused(elTrajMaxPts, trajCfg.maxPoints ?? 80);
 
         elJson.value = prettyJSON(cfg);
     };
