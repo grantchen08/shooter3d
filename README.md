@@ -58,12 +58,17 @@ Gameplay tuning lives in `docs/config/game.json`:
 
 - `projectile.initialSpeed`: initial projectile speed
 - `physics.gravity`: gravity vector `{x,y,z}` (also used for trajectory prediction)
+- `camera.distance`: camera distance from shooter
+- `camera.height`: camera height offset above shooter
+- `camera.orbitPitchDeg`: camera orbit pitch in **degrees**
+- `targets.minDistance`: nearest target/platform distance from shooter
+- `targets.maxDistance`: farthest target/platform distance from shooter
 
 ## Testing notes
 
 - **GitHub Pages caching**: if you don’t see the latest changes, do a hard refresh (`Ctrl+Shift+R`) or use a private window.
 - **Debug mode**: open the game with `?debug=1` to enable extra logs and the on-screen debug line.
-- **Debug tuning panel** (only in `?debug=1`): live-edit gravity + projectile speed and use **Copy JSON** / **Download game.json** to export the current values. Values are saved in your browser via `localStorage`.
+- **Debug tuning panel** (only in `?debug=1`): live-edit projectile speed, gravity, camera (height/distance/pitch), and target min/max distance, then use **Copy JSON** / **Download game.json** to export the current values. Values are saved in your browser via `localStorage`.
 - **Audio**: browsers require a user gesture to start WebAudio; sound effects will begin after your first interaction (tap/click/drag/key press).
 - **WebGL issues**:
   - Chrome/Chromium: check `chrome://gpu` and ensure hardware acceleration is enabled

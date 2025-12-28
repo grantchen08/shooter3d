@@ -25,7 +25,7 @@ let cameraHeight = 3; // Height offset from player
 
 // Camera orbit is fixed (3rd-person view). Drag/swipe controls AIM, not camera orbit.
 const cameraOrbitYaw = 0; // radians
-const cameraOrbitPitch = Math.PI / 10; // slightly above horizon
+let cameraOrbitPitch = Math.PI / 10; // radians; configurable via camera.orbitPitchDeg
 
 // Aim control variables (projectile orientation)
 let aimYaw = 0; // Horizontal aim (yaw) in radians
@@ -92,12 +92,38 @@ const ui = createUI({ debug: (m, d) => debugLog(m, d) });
 const DEFAULT_GAME_CONFIG = {
     projectile: { initialSpeed: 18 },
     physics: { gravity: { x: 0, y: -9.8, z: 0 } },
+    camera: { distance: 8, height: 3, orbitPitchDeg: 18 },
+    targets: { minDistance: 10, maxDistance: 26 },
 };
 let gameConfig = DEFAULT_GAME_CONFIG;
 let gravity = new CANNON.Vec3(0, -9.8, 0); // configurable
+const shooterPosition = new THREE.Vector3(0, 1, 0); // fixed
+let targetMinDistance = DEFAULT_GAME_CONFIG.targets.minDistance;
+let targetMaxDistance = DEFAULT_GAME_CONFIG.targets.maxDistance;
 
 function isFiniteNumber(n) {
     return typeof n === 'number' && Number.isFinite(n);
+}
+
+function toFiniteNumber(value, fallback) {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function clampNumber(n, { min = -Infinity, max = Infinity } = {}) {
+    if (!Number.isFinite(n)) return n;
+    return Math.max(min, Math.min(max, n));
+}
+
+function toRadians(deg) {
+    return (deg * Math.PI) / 180;
+}
+
+function getTargetStepDistances() {
+    // Preserve the "3 steps" feel from the original layout.
+    const minD = Math.max(0.1, Math.min(targetMinDistance, targetMaxDistance));
+    const maxD = Math.max(minD, targetMaxDistance);
+    return [minD, minD + 0.5 * (maxD - minD), maxD];
 }
 
 function applyGameConfig(cfg) {
@@ -113,6 +139,43 @@ function applyGameConfig(cfg) {
         gravity = new CANNON.Vec3(gx, gy, gz);
     }
 
+    // Camera tuning (pitch is configured in degrees)
+    const camDistance = next?.camera?.distance;
+    const camHeight = next?.camera?.height;
+    const camPitchDeg = next?.camera?.orbitPitchDeg;
+    if (isFiniteNumber(camDistance) && camDistance > 0) cameraDistance = camDistance;
+    if (isFiniteNumber(camHeight)) cameraHeight = camHeight;
+    if (isFiniteNumber(camPitchDeg)) cameraOrbitPitch = toRadians(camPitchDeg);
+    cameraOrbitPitch = clampNumber(cameraOrbitPitch, { min: -Math.PI / 2 + 0.01, max: Math.PI / 2 - 0.01 });
+    if (camera && player) updateCameraPosition();
+
+    // Targets distance range (keeps target direction/layout pattern fixed)
+    // Supports both new shape: targets:{minDistance,maxDistance} and legacy array form (derive distances).
+    let nextMinD = toFiniteNumber(next?.targets?.minDistance, targetMinDistance);
+    let nextMaxD = toFiniteNumber(next?.targets?.maxDistance, targetMaxDistance);
+    if (Array.isArray(next?.targets) && next.targets.length) {
+        // Legacy: infer distances from provided points (distance in XZ plane from shooter).
+        const ds = next.targets
+            .map((t) => {
+                const x = toFiniteNumber(t?.x, NaN);
+                const z = toFiniteNumber(t?.z, NaN);
+                if (!Number.isFinite(x) || !Number.isFinite(z)) return NaN;
+                const dx = x - shooterPosition.x;
+                const dz = z - shooterPosition.z;
+                return Math.sqrt(dx * dx + dz * dz);
+            })
+            .filter((d) => Number.isFinite(d));
+        if (ds.length) {
+            nextMinD = Math.min(...ds);
+            nextMaxD = Math.max(...ds);
+        }
+    }
+    if (isFiniteNumber(nextMinD) && isFiniteNumber(nextMaxD)) {
+        targetMinDistance = Math.max(0.1, nextMinD);
+        targetMaxDistance = Math.max(targetMinDistance, nextMaxD);
+        if (world) replacePlatformsAndTargets();
+    }
+
     // If physics world already exists, apply live.
     if (world) {
         world.gravity.set(gravity.x, gravity.y, gravity.z);
@@ -121,6 +184,12 @@ function applyGameConfig(cfg) {
     debugLog('[SnowballBlitz] config applied', {
         projectileSpeed,
         gravity: { x: gravity.x, y: gravity.y, z: gravity.z },
+        camera: {
+            distance: cameraDistance,
+            height: cameraHeight,
+            orbitPitchDeg: (cameraOrbitPitch * 180) / Math.PI,
+        },
+        targets: { minDistance: targetMinDistance, maxDistance: targetMaxDistance },
     });
 }
 
@@ -128,6 +197,12 @@ function getLiveGameConfig() {
     return {
         projectile: { initialSpeed: projectileSpeed },
         physics: { gravity: { x: gravity.x, y: gravity.y, z: gravity.z } },
+        camera: {
+            distance: cameraDistance,
+            height: cameraHeight,
+            orbitPitchDeg: Math.round(((cameraOrbitPitch * 180) / Math.PI) * 100) / 100,
+        },
+        targets: { minDistance: targetMinDistance, maxDistance: targetMaxDistance },
     };
 }
 
@@ -369,7 +444,7 @@ function createPlayer() {
         metalness: 0.3
     });
     player = new THREE.Mesh(playerGeometry, playerMaterial);
-    player.position.set(0, 1, 0); // Position at ground level (height 1 = radius 1)
+    player.position.copy(shooterPosition); // fixed
     player.castShadow = true;
     scene.add(player);
 }
@@ -591,11 +666,13 @@ function createPlatformsAndTargets() {
 }
 
 function createTieredPlatforms() {
-    // Simple tiered "staircase" in front of the player (toward -Z)
+    // Simple tiered "staircase" in front of the player (toward -Z).
+    // Z positions are derived from target distance range.
+    const [d1, d2, d3] = getTargetStepDistances();
     const steps = [
-        { w: 12, h: 1.0, d: 6, x: 0, y: 0.5, z: -10 },
-        { w: 10, h: 1.0, d: 6, x: 0, y: 1.5, z: -18 },
-        { w: 8,  h: 1.0, d: 6, x: 0, y: 2.5, z: -26 },
+        { w: 12, h: 1.0, d: 6, x: shooterPosition.x, y: 0.5, z: shooterPosition.z - d1 },
+        { w: 10, h: 1.0, d: 6, x: shooterPosition.x, y: 1.5, z: shooterPosition.z - d2 },
+        { w: 8,  h: 1.0, d: 6, x: shooterPosition.x, y: 2.5, z: shooterPosition.z - d3 },
     ];
 
     const mat = new THREE.MeshStandardMaterial({
@@ -656,20 +733,21 @@ function createSnowmanMesh() {
 }
 
 function createTargets() {
-    // Place static targets on platforms in simple rows
+    // Keep target direction/layout fixed; only distances change via config.
+    const [d1, d2, d3] = getTargetStepDistances();
     const placements = [
         // step 1 (top surface is y=1.0)
-        { x: -3.0, y: 1.0, z: -10 },
-        { x:  0.0, y: 1.0, z: -10 },
-        { x:  3.0, y: 1.0, z: -10 },
+        { x: shooterPosition.x - 3.0, y: 1.0, z: shooterPosition.z - d1 },
+        { x: shooterPosition.x + 0.0, y: 1.0, z: shooterPosition.z - d1 },
+        { x: shooterPosition.x + 3.0, y: 1.0, z: shooterPosition.z - d1 },
         // step 2 (top surface is y=2.0)
-        { x: -2.5, y: 2.0, z: -18 },
-        { x:  0.0, y: 2.0, z: -18 },
-        { x:  2.5, y: 2.0, z: -18 },
+        { x: shooterPosition.x - 2.5, y: 2.0, z: shooterPosition.z - d2 },
+        { x: shooterPosition.x + 0.0, y: 2.0, z: shooterPosition.z - d2 },
+        { x: shooterPosition.x + 2.5, y: 2.0, z: shooterPosition.z - d2 },
         // step 3 (top surface is y=3.0)
-        { x: -2.0, y: 3.0, z: -26 },
-        { x:  0.0, y: 3.0, z: -26 },
-        { x:  2.0, y: 3.0, z: -26 },
+        { x: shooterPosition.x - 2.0, y: 3.0, z: shooterPosition.z - d3 },
+        { x: shooterPosition.x + 0.0, y: 3.0, z: shooterPosition.z - d3 },
+        { x: shooterPosition.x + 2.0, y: 3.0, z: shooterPosition.z - d3 },
     ];
 
     for (const p of placements) {
@@ -697,6 +775,43 @@ function createTargets() {
     }
 
     debugLog('[SnowballBlitz] targets created', { count: targets.length });
+}
+
+function clearTargets() {
+    if (!world || !scene) return;
+    for (const t of targets) {
+        try {
+            scene.remove(t.mesh);
+        } catch {}
+        try {
+            world.removeBody(t.body);
+        } catch {}
+    }
+    targets.length = 0;
+    targetByBodyId.clear();
+}
+
+function clearPlatforms() {
+    if (!world || !scene) return;
+    for (const p of platforms) {
+        try {
+            scene.remove(p.mesh);
+        } catch {}
+        try {
+            world.removeBody(p.body);
+        } catch {}
+        try {
+            worldBodyIds.delete(p.body.id);
+        } catch {}
+    }
+    platforms.length = 0;
+}
+
+function replacePlatformsAndTargets() {
+    clearTargets();
+    clearPlatforms();
+    createTieredPlatforms();
+    createTargets();
 }
 
 function setupFireButton() {

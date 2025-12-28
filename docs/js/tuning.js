@@ -3,6 +3,8 @@
  *
  * Features:
  * - Live-edit projectile initial speed + gravity vector
+ * - Live-edit camera (height/distance/pitch in degrees)
+ * - Live-edit target min/max distance (keeps direction/layout fixed)
  * - Persist in localStorage
  * - Copy JSON to clipboard / Download game.json
  */
@@ -119,6 +121,29 @@ function injectStylesOnce() {
         align-items: center;
         gap: 8px;
         margin: 8px 0;
+      }
+      .tuning-panel .section-title {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255,255,255,0.12);
+      }
+      .tuning-panel .grid3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+        width: 100%;
+      }
+      .tuning-panel .grid3 input[type="number"] {
+        width: 100%;
+      }
+      .tuning-panel .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        width: 100%;
+      }
+      .tuning-panel .grid2 input[type="number"] {
+        width: 100%;
       }
       .tuning-panel h3 {
         margin: 0;
@@ -244,6 +269,7 @@ export function createTuningPanel({
         </div>
       </div>
       <div class="tuning-body" id="tune-body">
+        <h3 class="section-title">Physics</h3>
         <div class="row">
           <label for="tune-speed">Projectile speed</label>
           <input id="tune-speed" type="number" step="0.1" min="0.1" />
@@ -260,6 +286,27 @@ export function createTuningPanel({
           <label for="tune-gz">Gravity Z</label>
           <input id="tune-gz" type="number" step="0.1" />
         </div>
+
+        <h3 class="section-title">Camera</h3>
+        <div class="row">
+          <label for="tune-cam-distance">Distance</label>
+          <input id="tune-cam-distance" type="number" step="0.1" min="0.1" />
+        </div>
+        <div class="row">
+          <label for="tune-cam-height">Height</label>
+          <input id="tune-cam-height" type="number" step="0.1" />
+        </div>
+        <div class="row">
+          <label for="tune-cam-pitch">Orbit pitch (deg)</label>
+          <input id="tune-cam-pitch" type="number" step="0.1" />
+        </div>
+
+        <h3 class="section-title">Targets</h3>
+        <div class="grid2">
+          <input id="tune-target-min" type="number" step="0.1" min="0.1" aria-label="Target min distance" />
+          <input id="tune-target-max" type="number" step="0.1" min="0.1" aria-label="Target max distance" />
+        </div>
+
         <div class="btns">
           <button type="button" id="tune-copy">Copy JSON</button>
           <button type="button" id="tune-download" class="secondary">Download game.json</button>
@@ -279,6 +326,11 @@ export function createTuningPanel({
     const elGx = panel.querySelector('#tune-gx');
     const elGy = panel.querySelector('#tune-gy');
     const elGz = panel.querySelector('#tune-gz');
+    const elCamDistance = panel.querySelector('#tune-cam-distance');
+    const elCamHeight = panel.querySelector('#tune-cam-height');
+    const elCamPitch = panel.querySelector('#tune-cam-pitch');
+    const elTargetMin = panel.querySelector('#tune-target-min');
+    const elTargetMax = panel.querySelector('#tune-target-max');
     const elJson = panel.querySelector('#tune-json');
     const elStatus = panel.querySelector('#tune-status');
 
@@ -291,19 +343,36 @@ export function createTuningPanel({
         const gx = toNumber(elGx.value, defaultConfig?.physics?.gravity?.x ?? 0);
         const gy = toNumber(elGy.value, defaultConfig?.physics?.gravity?.y ?? -9.8);
         const gz = toNumber(elGz.value, defaultConfig?.physics?.gravity?.z ?? 0);
+        const camDistance = clampNumber(toNumber(elCamDistance.value, defaultConfig?.camera?.distance ?? 8), { min: 0.1 });
+        const camHeight = toNumber(elCamHeight.value, defaultConfig?.camera?.height ?? 3);
+        const camPitch = toNumber(elCamPitch.value, defaultConfig?.camera?.orbitPitchDeg ?? 18);
+
+        const minD = clampNumber(toNumber(elTargetMin.value, defaultConfig?.targets?.minDistance ?? 10), { min: 0.1 });
+        const maxD = clampNumber(toNumber(elTargetMax.value, defaultConfig?.targets?.maxDistance ?? 26), { min: 0.1 });
+
         return {
             projectile: { initialSpeed: speed },
             physics: { gravity: { x: gx, y: gy, z: gz } },
+            camera: { distance: camDistance, height: camHeight, orbitPitchDeg: camPitch },
+            targets: { minDistance: minD, maxDistance: maxD },
         };
     };
 
     const render = (cfg) => {
         const speed = cfg?.projectile?.initialSpeed ?? 18;
         const g = cfg?.physics?.gravity ?? { x: 0, y: -9.8, z: 0 };
+        const cam = cfg?.camera ?? { distance: 8, height: 3, orbitPitchDeg: 18 };
+        const tgt = cfg?.targets ?? { minDistance: 10, maxDistance: 26 };
         elSpeed.value = String(speed);
         elGx.value = String(g.x ?? 0);
         elGy.value = String(g.y ?? -9.8);
         elGz.value = String(g.z ?? 0);
+        elCamDistance.value = String(cam.distance ?? 8);
+        elCamHeight.value = String(cam.height ?? 3);
+        elCamPitch.value = String(cam.orbitPitchDeg ?? 18);
+        elTargetMin.value = String(tgt.minDistance ?? 10);
+        elTargetMax.value = String(tgt.maxDistance ?? 26);
+
         elJson.value = prettyJSON(cfg);
     };
 
@@ -393,6 +462,11 @@ export function createTuningPanel({
     elGx.addEventListener('input', scheduleApply);
     elGy.addEventListener('input', scheduleApply);
     elGz.addEventListener('input', scheduleApply);
+    elCamDistance.addEventListener('input', scheduleApply);
+    elCamHeight.addEventListener('input', scheduleApply);
+    elCamPitch.addEventListener('input', scheduleApply);
+    elTargetMin.addEventListener('input', scheduleApply);
+    elTargetMax.addEventListener('input', scheduleApply);
 
     const toggleCollapsed = () => {
         panel.classList.toggle('collapsed');

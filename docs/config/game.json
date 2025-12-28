@@ -8,5 +8,14 @@
       "y": -120,
       "z": 0
     }
+  },
+  "camera": {
+    "distance": 8,
+    "height": 3,
+    "orbitPitchDeg": 18
+  },
+  "targets": {
+    "minDistance": 10,
+    "maxDistance": 26
   }
 }
