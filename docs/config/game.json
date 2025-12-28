@@ -14,6 +14,12 @@
     "height": 1.4,
     "orbitPitchDeg": 6
   },
+  "player": {
+    "height": 2
+  },
+  "snowman": {
+    "height": 1.2
+  },
   "targets": {
     "minDistance": 5.2,
     "maxDistance": 12.8

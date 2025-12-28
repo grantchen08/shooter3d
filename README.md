@@ -61,6 +61,8 @@ Gameplay tuning lives in `docs/config/game.json`:
 - `camera.distance`: camera distance from shooter
 - `camera.height`: camera height offset above shooter
 - `camera.orbitPitchDeg`: camera orbit pitch in **degrees**
+- `player.height`: shooter (player) height (visual)
+- `snowman.height`: target snowman height (visual + collider)
 - `targets.minDistance`: nearest target/platform distance from shooter
 - `targets.maxDistance`: farthest target/platform distance from shooter
 

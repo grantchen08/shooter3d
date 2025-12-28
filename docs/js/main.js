@@ -93,13 +93,17 @@ const DEFAULT_GAME_CONFIG = {
     projectile: { initialSpeed: 18 },
     physics: { gravity: { x: 0, y: -9.8, z: 0 } },
     camera: { distance: 8, height: 3, orbitPitchDeg: 18 },
+    player: { height: 2.0 },
+    snowman: { height: 1.2 },
     targets: { minDistance: 10, maxDistance: 26 },
 };
 let gameConfig = DEFAULT_GAME_CONFIG;
 let gravity = new CANNON.Vec3(0, -9.8, 0); // configurable
-const shooterPosition = new THREE.Vector3(0, 1, 0); // fixed
+const shooterPosition = new THREE.Vector3(0, 0, 0); // fixed on ground (XZ)
 let targetMinDistance = DEFAULT_GAME_CONFIG.targets.minDistance;
 let targetMaxDistance = DEFAULT_GAME_CONFIG.targets.maxDistance;
+let playerHeight = DEFAULT_GAME_CONFIG.player.height;
+let snowmanHeight = DEFAULT_GAME_CONFIG.snowman.height;
 
 function isFiniteNumber(n) {
     return typeof n === 'number' && Number.isFinite(n);
@@ -126,6 +130,36 @@ function getTargetStepDistances() {
     return [minD, minD + 0.5 * (maxD - minD), maxD];
 }
 
+function rebuildPlayerMesh() {
+    if (!player) return;
+    const h = clampNumber(toFiniteNumber(playerHeight, 2.0), { min: 0.2, max: 50 });
+    const r = clampNumber(h * 0.25, { min: 0.05, max: 5 }); // keep the same silhouette ratio as before (2.0 -> 0.5)
+
+    if (player.geometry) player.geometry.dispose();
+    player.geometry = new THREE.CylinderGeometry(r, r, h, 16);
+
+    // Keep feet on the ground at shooterPosition
+    player.position.set(shooterPosition.x, h * 0.5, shooterPosition.z);
+
+    // Camera follows player
+    if (camera) updateCameraPosition();
+}
+
+function getSnowmanDims(h) {
+    // Original snowman height is ~1.19 units:
+    // - body radius 0.45 (body bottom at y=0, top at y=0.9)
+    // - head center at y=0.91, head radius 0.28 (top at y=1.19)
+    const baseH = 1.19;
+    const scale = h / baseH;
+    const bodyR = 0.45 * scale;
+    const headR = 0.28 * scale;
+    const gap = 0.18 * scale;
+    const noseR = 0.06 * scale;
+    const noseL = 0.25 * scale;
+    const colliderR = 0.55 * scale;
+    return { bodyR, headR, gap, noseR, noseL, colliderR };
+}
+
 function applyGameConfig(cfg) {
     const next = cfg || DEFAULT_GAME_CONFIG;
 
@@ -137,6 +171,23 @@ function applyGameConfig(cfg) {
     const gz = next?.physics?.gravity?.z;
     if (isFiniteNumber(gx) && isFiniteNumber(gy) && isFiniteNumber(gz)) {
         gravity = new CANNON.Vec3(gx, gy, gz);
+    }
+
+    // Player height (visual)
+    const nextPlayerH = next?.player?.height;
+    if (isFiniteNumber(nextPlayerH) && nextPlayerH > 0) {
+        const prev = playerHeight;
+        playerHeight = nextPlayerH;
+        if (player && prev !== playerHeight) rebuildPlayerMesh();
+    }
+
+    // Snowman height (visual + collider)
+    const nextSnowmanH = next?.snowman?.height;
+    let snowmanChanged = false;
+    if (isFiniteNumber(nextSnowmanH) && nextSnowmanH > 0) {
+        const prev = snowmanHeight;
+        snowmanHeight = nextSnowmanH;
+        snowmanChanged = prev !== snowmanHeight;
     }
 
     // Camera tuning (pitch is configured in degrees)
@@ -176,6 +227,12 @@ function applyGameConfig(cfg) {
         if (world) replacePlatformsAndTargets();
     }
 
+    // If snowman size changed, respawn targets so mesh/collider match.
+    if (snowmanChanged && world) {
+        clearTargets();
+        createTargets();
+    }
+
     // If physics world already exists, apply live.
     if (world) {
         world.gravity.set(gravity.x, gravity.y, gravity.z);
@@ -189,6 +246,8 @@ function applyGameConfig(cfg) {
             height: cameraHeight,
             orbitPitchDeg: (cameraOrbitPitch * 180) / Math.PI,
         },
+        player: { height: playerHeight },
+        snowman: { height: snowmanHeight },
         targets: { minDistance: targetMinDistance, maxDistance: targetMaxDistance },
     });
 }
@@ -202,6 +261,8 @@ function getLiveGameConfig() {
             height: cameraHeight,
             orbitPitchDeg: Math.round(((cameraOrbitPitch * 180) / Math.PI) * 100) / 100,
         },
+        player: { height: playerHeight },
+        snowman: { height: snowmanHeight },
         targets: { minDistance: targetMinDistance, maxDistance: targetMaxDistance },
     };
 }
@@ -437,14 +498,15 @@ function setupLighting() {
 
 function createPlayer() {
     // Create player character as a cylinder (placeholder)
-    const playerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+    const playerGeometry = new THREE.CylinderGeometry(0.5, 0.5, playerHeight, 16);
     const playerMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x4169E1, // Royal blue
         roughness: 0.7,
         metalness: 0.3
     });
     player = new THREE.Mesh(playerGeometry, playerMaterial);
-    player.position.copy(shooterPosition); // fixed
+    // Keep feet on the ground at shooterPosition
+    player.position.set(shooterPosition.x, playerHeight * 0.5, shooterPosition.z);
     player.castShadow = true;
     scene.add(player);
 }
@@ -706,27 +768,30 @@ function createTieredPlatforms() {
 function createSnowmanMesh() {
     const group = new THREE.Group();
 
+    const h = clampNumber(toFiniteNumber(snowmanHeight, DEFAULT_GAME_CONFIG.snowman.height), { min: 0.2, max: 50 });
+    const { bodyR, headR, gap, noseR, noseL } = getSnowmanDims(h);
+
     const snowMat = new THREE.MeshStandardMaterial({
         color: 0xffffff,
         roughness: 0.85,
         metalness: 0.0,
     });
 
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), snowMat);
-    body.position.set(0, 0.45, 0);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(bodyR, 16, 16), snowMat);
+    body.position.set(0, bodyR, 0);
     group.add(body);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), snowMat);
-    head.position.set(0, 0.45 + 0.28 + 0.18, 0);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(headR, 16, 16), snowMat);
+    head.position.set(0, bodyR + headR + gap, 0);
     group.add(head);
 
     // Tiny "nose" for orientation
     const nose = new THREE.Mesh(
-        new THREE.ConeGeometry(0.06, 0.25, 10),
+        new THREE.ConeGeometry(noseR, noseL, 10),
         new THREE.MeshStandardMaterial({ color: 0xff9500, roughness: 0.6 })
     );
     nose.rotation.x = Math.PI / 2;
-    nose.position.set(0, head.position.y, -0.28);
+    nose.position.set(0, head.position.y, -headR);
     group.add(nose);
 
     return group;
@@ -757,11 +822,13 @@ function createTargets() {
 
         // Physics body (static). Use a single sphere collider for now.
         // Center sits above the platform surface.
-        const shape = new CANNON.Sphere(0.55);
+        const h = clampNumber(toFiniteNumber(snowmanHeight, DEFAULT_GAME_CONFIG.snowman.height), { min: 0.2, max: 50 });
+        const { colliderR } = getSnowmanDims(h);
+        const shape = new CANNON.Sphere(colliderR);
         const body = new CANNON.Body({
             mass: 0,
             shape,
-            position: new CANNON.Vec3(p.x, p.y + 0.55, p.z),
+            position: new CANNON.Vec3(p.x, p.y + colliderR, p.z),
         });
         // Targets should not deflect the projectile (piercing), but should still report contacts.
         body.collisionResponse = false;
