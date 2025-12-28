@@ -51,6 +51,7 @@ If using VS Code, install the "Live Server" extension and right-click `index.htm
 
 - Modern web browser with WebGL support (Chrome, Firefox, Safari, Edge)
 - Landscape orientation (game is designed for horizontal screens)
+- Fullscreen supported (use the ⛶ button or press `F`; some mobile browsers restrict fullscreen)
 
 ## Configuration
 

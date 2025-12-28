@@ -465,6 +465,7 @@ async function init() {
 
     // Fire button UI (desktop + mobile)
     setupFireButton();
+    setupFullscreenButton();
 
     debugLog('[SnowballBlitz] init() complete');
     
@@ -941,6 +942,82 @@ function setupFireButton() {
         event.preventDefault();
         event.stopPropagation();
     });
+}
+
+function getFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+async function requestFullscreen(el) {
+    if (!el) return false;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!fn) return false;
+    try {
+        // Some browsers accept an options object; others ignore it.
+        const res = fn.call(el, { navigationUI: 'hide' });
+        if (res && typeof res.then === 'function') await res;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function exitFullscreen() {
+    const fn = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!fn) return false;
+    try {
+        const res = fn.call(document);
+        if (res && typeof res.then === 'function') await res;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function setupFullscreenButton() {
+    const btn = document.getElementById('fullscreen-button');
+    const container = document.getElementById('game-container') || document.documentElement;
+    if (!btn || !container) return;
+
+    const sync = () => {
+        const fs = !!getFullscreenElement();
+        btn.classList.toggle('pressed', fs);
+        btn.setAttribute('aria-pressed', fs ? 'true' : 'false');
+        btn.title = fs ? 'Exit fullscreen (F)' : 'Fullscreen (F)';
+    };
+
+    const toggle = async (event) => {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        // Also unlock audio on gesture
+        try { sfx.unlock(); } catch {}
+        try { bgm.unlock(); } catch {}
+
+        if (getFullscreenElement()) {
+            await exitFullscreen();
+        } else {
+            await requestFullscreen(container);
+        }
+        sync();
+    };
+
+    btn.addEventListener('click', toggle);
+    document.addEventListener('fullscreenchange', sync);
+    // WebKit fallback event name (older Safari)
+    document.addEventListener('webkitfullscreenchange', sync);
+
+    // Keyboard shortcut: F toggles fullscreen
+    document.addEventListener('keydown', (event) => {
+        if (event.repeat) return;
+        if (event.code === 'KeyF') {
+            toggle(event);
+        }
+    }, { capture: true });
+
+    sync();
 }
 
 function setupTrajectoryLine() {
