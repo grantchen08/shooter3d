@@ -14,6 +14,10 @@
     "height": 2.5,
     "orbitPitchDeg": 0
   },
+  "audio": {
+    "bgmVolume": 0.12,
+    "sfxVolume": 0.55
+  },
   "player": {
     "height": 1
   },

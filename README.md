@@ -62,6 +62,8 @@ Gameplay tuning lives in `docs/config/game.json`:
 - `camera.distance`: camera distance from shooter
 - `camera.height`: camera height offset above shooter
 - `camera.orbitPitchDeg`: camera orbit pitch in **degrees**
+- `audio.bgmVolume`: background music volume (0..1)
+- `audio.sfxVolume`: sound effects volume (0..1)
 - `player.height`: shooter (player) height (visual)
 - `snowman.height`: target snowman height (visual + collider)
 - `trajectory.segmentLength`: spacing between predicted-arc points (smaller = smoother)

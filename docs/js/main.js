@@ -122,6 +122,7 @@ const DEFAULT_GAME_CONFIG = {
     projectile: { initialSpeed: 18 },
     physics: { gravity: { x: 0, y: -9.8, z: 0 } },
     camera: { distance: 8, height: 3, orbitPitchDeg: 18 },
+    audio: { bgmVolume: 0.12, sfxVolume: 0.55 },
     player: { height: 2.0 },
     snowman: { height: 1.2 },
     trajectory: { maxTimeSec: 3.0, segmentLength: 0.35, maxPoints: 80 },
@@ -201,6 +202,16 @@ function applyGameConfig(cfg) {
     const gz = next?.physics?.gravity?.z;
     if (isFiniteNumber(gx) && isFiniteNumber(gy) && isFiniteNumber(gz)) {
         gravity = new CANNON.Vec3(gx, gy, gz);
+    }
+
+    // Audio volumes (0..1)
+    const bgmVol = next?.audio?.bgmVolume;
+    const sfxVol = next?.audio?.sfxVolume;
+    if (isFiniteNumber(bgmVol)) {
+        try { bgm.setVolume(clampNumber(bgmVol, { min: 0, max: 1 })); } catch {}
+    }
+    if (isFiniteNumber(sfxVol)) {
+        try { sfx.setMasterVolume(clampNumber(sfxVol, { min: 0, max: 1 })); } catch {}
     }
 
     // Trajectory sampling quality (adaptive step based on desired segment length)
@@ -284,6 +295,10 @@ function applyGameConfig(cfg) {
             height: cameraHeight,
             orbitPitchDeg: (cameraOrbitPitch * 180) / Math.PI,
         },
+        audio: {
+            bgmVolume: bgm.volume,
+            sfxVolume: sfx.masterVolume,
+        },
         player: { height: playerHeight },
         snowman: { height: snowmanHeight },
         trajectory: {
@@ -303,6 +318,10 @@ function getLiveGameConfig() {
             distance: cameraDistance,
             height: cameraHeight,
             orbitPitchDeg: Math.round(((cameraOrbitPitch * 180) / Math.PI) * 100) / 100,
+        },
+        audio: {
+            bgmVolume: Math.round(bgm.volume * 100) / 100,
+            sfxVolume: Math.round(sfx.masterVolume * 100) / 100,
         },
         player: { height: playerHeight },
         snowman: { height: snowmanHeight },

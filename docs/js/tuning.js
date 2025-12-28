@@ -169,6 +169,12 @@ function injectStylesOnce() {
       }
       .tuning-panel .tuning-body {
         display: block;
+        /* If content exceeds viewport, make panel body scrollable */
+        max-height: min(70vh, calc(100vh - 120px));
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
       }
       .tuning-panel.collapsed {
         width: min(220px, calc(100% - 24px));
@@ -307,6 +313,16 @@ export function createTuningPanel({
           <input id="tune-target-max" type="number" step="0.1" min="0.1" aria-label="Target max distance" />
         </div>
 
+        <h3 class="section-title">Audio</h3>
+        <div class="row">
+          <label for="tune-bgm-vol">BGM volume</label>
+          <input id="tune-bgm-vol" type="number" step="0.01" min="0" max="1" />
+        </div>
+        <div class="row">
+          <label for="tune-sfx-vol">SFX volume</label>
+          <input id="tune-sfx-vol" type="number" step="0.01" min="0" max="1" />
+        </div>
+
         <h3 class="section-title">Sizes</h3>
         <div class="row">
           <label for="tune-player-height">Player height</label>
@@ -351,6 +367,8 @@ export function createTuningPanel({
     const elCamPitch = panel.querySelector('#tune-cam-pitch');
     const elTargetMin = panel.querySelector('#tune-target-min');
     const elTargetMax = panel.querySelector('#tune-target-max');
+    const elBgmVol = panel.querySelector('#tune-bgm-vol');
+    const elSfxVol = panel.querySelector('#tune-sfx-vol');
     const elPlayerHeight = panel.querySelector('#tune-player-height');
     const elSnowmanHeight = panel.querySelector('#tune-snowman-height');
     const elTrajSeg = panel.querySelector('#tune-traj-seg');
@@ -374,6 +392,9 @@ export function createTuningPanel({
         const minD = clampNumber(toNumber(elTargetMin.value, defaultConfig?.targets?.minDistance ?? 10), { min: 0.1 });
         const maxD = clampNumber(toNumber(elTargetMax.value, defaultConfig?.targets?.maxDistance ?? 26), { min: 0.1 });
 
+        const bgmVol = clampNumber(toNumber(elBgmVol.value, defaultConfig?.audio?.bgmVolume ?? 0.12), { min: 0, max: 1 });
+        const sfxVol = clampNumber(toNumber(elSfxVol.value, defaultConfig?.audio?.sfxVolume ?? 0.55), { min: 0, max: 1 });
+
         const playerH = clampNumber(toNumber(elPlayerHeight.value, defaultConfig?.player?.height ?? 2), { min: 0.1 });
         const snowmanH = clampNumber(toNumber(elSnowmanHeight.value, defaultConfig?.snowman?.height ?? 1.2), { min: 0.1 });
         const trajSeg = clampNumber(toNumber(elTrajSeg.value, defaultConfig?.trajectory?.segmentLength ?? 0.35), { min: 0.05 });
@@ -384,6 +405,7 @@ export function createTuningPanel({
             physics: { gravity: { x: gx, y: gy, z: gz } },
             camera: { distance: camDistance, height: camHeight, orbitPitchDeg: camPitch },
             targets: { minDistance: minD, maxDistance: maxD },
+            audio: { bgmVolume: bgmVol, sfxVolume: sfxVol },
             player: { height: playerH },
             snowman: { height: snowmanH },
             trajectory: { segmentLength: trajSeg, maxPoints: Math.floor(trajMaxPts) },
@@ -395,6 +417,7 @@ export function createTuningPanel({
         const g = cfg?.physics?.gravity ?? { x: 0, y: -9.8, z: 0 };
         const cam = cfg?.camera ?? { distance: 8, height: 3, orbitPitchDeg: 18 };
         const tgt = cfg?.targets ?? { minDistance: 10, maxDistance: 26 };
+        const aud = cfg?.audio ?? { bgmVolume: 0.12, sfxVolume: 0.55 };
         const playerCfg = cfg?.player ?? { height: 2 };
         const snowmanCfg = cfg?.snowman ?? { height: 1.2 };
         const trajCfg = cfg?.trajectory ?? { segmentLength: 0.35, maxPoints: 80 };
@@ -407,6 +430,8 @@ export function createTuningPanel({
         elCamPitch.value = String(cam.orbitPitchDeg ?? 18);
         elTargetMin.value = String(tgt.minDistance ?? 10);
         elTargetMax.value = String(tgt.maxDistance ?? 26);
+        elBgmVol.value = String(aud.bgmVolume ?? 0.12);
+        elSfxVol.value = String(aud.sfxVolume ?? 0.55);
         elPlayerHeight.value = String(playerCfg.height ?? 2);
         elSnowmanHeight.value = String(snowmanCfg.height ?? 1.2);
         elTrajSeg.value = String(trajCfg.segmentLength ?? 0.35);
@@ -506,6 +531,8 @@ export function createTuningPanel({
     elCamPitch.addEventListener('input', scheduleApply);
     elTargetMin.addEventListener('input', scheduleApply);
     elTargetMax.addEventListener('input', scheduleApply);
+    elBgmVol.addEventListener('input', scheduleApply);
+    elSfxVol.addEventListener('input', scheduleApply);
     elPlayerHeight.addEventListener('input', scheduleApply);
     elSnowmanHeight.addEventListener('input', scheduleApply);
     elTrajSeg.addEventListener('input', scheduleApply);
