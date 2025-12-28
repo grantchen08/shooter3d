@@ -92,6 +92,28 @@ const bgm = createBgm({
     debug: (m, d) => debugLog(m, d),
 });
 
+function setupGlobalAudioUnlock() {
+    // iOS Safari can be picky about which gesture resumes WebAudio.
+    // Ensure we attempt unlock from a guaranteed user gesture on the document.
+    let done = false;
+    const tryUnlock = (event) => {
+        if (done) return;
+        done = true;
+        try { sfx.unlock(); } catch {}
+        try { bgm.unlock(); } catch {}
+        // Remove listeners after first attempt.
+        document.removeEventListener('pointerdown', tryUnlock, true);
+        document.removeEventListener('touchend', tryUnlock, true);
+        document.removeEventListener('click', tryUnlock, true);
+        document.removeEventListener('keydown', tryUnlock, true);
+    };
+
+    document.addEventListener('pointerdown', tryUnlock, true);
+    document.addEventListener('touchend', tryUnlock, true);
+    document.addEventListener('click', tryUnlock, true);
+    document.addEventListener('keydown', tryUnlock, true);
+}
+
 // UI/HUD
 const ui = createUI({ debug: (m, d) => debugLog(m, d) });
 
@@ -424,6 +446,7 @@ async function init() {
     
     // Setup input handlers
     setupInputHandlers();
+    setupGlobalAudioUnlock();
 
     // Temporary firing input (until the on-screen fire button stage)
     setupFireInputHandlers();
