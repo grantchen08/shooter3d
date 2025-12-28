@@ -86,7 +86,7 @@ let trajectoryMaxPoints = 80;
 // Audio SFX (asset-free)
 const sfx = createSfx({ masterVolume: 0.55, debug: (m, d) => debugLog(m, d) });
 const bgm = createBgm({
-    volume: 0.22,
+    volume: 0.12,
     tracks: ['assets/music/bgm01.mp3', 'assets/music/bgm02.mp3'],
     shuffle: true,
     debug: (m, d) => debugLog(m, d),
