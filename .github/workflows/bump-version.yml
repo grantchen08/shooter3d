@@ -1,0 +1,76 @@
+name: bump-version
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump patch version (docs/js/version.js)
+        if: ${{ github.actor != 'github-actions[bot]' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILE="docs/js/version.js"
+          if [ ! -f "$FILE" ]; then
+            echo "Missing $FILE; skipping."
+            exit 0
+          fi
+
+          BASE="$(git log -n 1 --pretty=%H -- "$FILE" || true)"
+          if [ -z "$BASE" ]; then
+            echo "No history for $FILE; skipping."
+            exit 0
+          fi
+
+          COUNT="$(git rev-list --count "${BASE}..HEAD")"
+          echo "Commits since last version file change: $COUNT"
+          if [ "$COUNT" -le 0 ]; then
+            echo "No bump needed."
+            exit 0
+          fi
+
+          BUMP_BY="$COUNT" node - <<'NODE'
+          const fs = require('fs');
+          const path = 'docs/js/version.js';
+          const src = fs.readFileSync(path, 'utf8');
+          const m = src.match(/export const VERSION = '(\d+)\.(\d+)\.(\d+)';/);
+          if (!m) throw new Error('VERSION not found');
+          const major = Number(m[1]);
+          const minor = Number(m[2]);
+          const patch = Number(m[3]);
+          const bumpBy = Number(process.env.BUMP_BY || '1');
+          const next = `${major}.${minor}.${patch + bumpBy}`;
+          const out = src.replace(m[0], `export const VERSION = '${next}';`);
+          fs.writeFileSync(path, out);
+          console.log(`Bumped to ${next}`);
+          NODE
+
+      - name: Commit and push
+        if: ${{ github.actor != 'github-actions[bot]' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          # Commit without modifying global git config
+          VER="$(node -p \"require('fs').readFileSync('docs/js/version.js','utf8').match(/VERSION = '(\\\\d+\\\\.\\\\d+\\\\.\\\\d+)'/)[1]\")"
+          git add docs/js/version.js
+          git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' \
+            commit -m "Bump version to ${VER}"
+          git push
+

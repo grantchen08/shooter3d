@@ -9,6 +9,7 @@ import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
 import { createBgm, createSfx } from './audio.js';
 import { createUI } from './ui.js';
 import { createTuningPanel } from './tuning.js';
+import { VERSION } from './version.js';
 
 // Scene setup
 let scene, camera, renderer;
@@ -475,6 +476,8 @@ async function init() {
 
     // HUD + overlay
     ui.init({ timeLimitSec: TIME_LIMIT_SEC, onRestart: resetGame });
+    const versionEl = document.getElementById('hud-version');
+    if (versionEl) versionEl.textContent = `v${VERSION}`;
 
     // On-screen debug line (only with ?debug=1)
     if (DEBUG) {
