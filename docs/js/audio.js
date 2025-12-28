@@ -188,3 +188,112 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
     };
 }
 
+/**
+ * Background music (BGM) helper using HTMLAudioElement (mp3/ogg/etc).
+ *
+ * Why HTMLAudio (vs WebAudio):
+ * - Simple, robust for streaming mp3
+ * - Still respects autoplay restrictions (must call unlock() from a gesture)
+ */
+export function createBgm({
+    enabled = true,
+    volume = 0.25,
+    tracks = [],
+    shuffle = true,
+    debug = null,
+} = {}) {
+    const log = (message, data) => {
+        try {
+            if (typeof debug === 'function') debug(message, data);
+        } catch {
+            // ignore
+        }
+    };
+
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+    const list = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
+    let audio = null;
+    let unlocked = false;
+    let idx = 0;
+
+    const pickStartIndex = () => {
+        if (!list.length) return 0;
+        if (!shuffle) return 0;
+        return Math.floor(Math.random() * list.length);
+    };
+
+    const ensureAudio = () => {
+        if (audio) return audio;
+        if (!list.length) return null;
+
+        idx = pickStartIndex();
+        audio = new Audio(list[idx]);
+        audio.preload = 'auto';
+        audio.loop = false; // we handle looping/playlist manually
+        audio.volume = clamp(volume, 0, 1);
+
+        audio.addEventListener('ended', () => {
+            // Advance playlist
+            if (!enabled || !unlocked || !audio || !list.length) return;
+            idx = (idx + 1) % list.length;
+            audio.src = list[idx];
+            audio.currentTime = 0;
+            const p = audio.play();
+            if (p && typeof p.catch === 'function') {
+                p.catch(() => {
+                    // ignore (autoplay restrictions can re-trigger on src swap in some browsers)
+                });
+            }
+        });
+
+        return audio;
+    };
+
+    const setVolume = (v) => {
+        volume = clamp(Number(v), 0, 1);
+        if (audio) audio.volume = volume;
+    };
+
+    const setEnabled = (on) => {
+        enabled = !!on;
+        if (!audio) return;
+        if (!enabled) {
+            try { audio.pause(); } catch {}
+        } else if (unlocked) {
+            const p = audio.play();
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+        }
+    };
+
+    const unlock = async () => {
+        if (!enabled || unlocked) return;
+        const a = ensureAudio();
+        if (!a) return;
+        try {
+            const p = a.play();
+            if (p && typeof p.then === 'function') await p;
+            unlocked = !a.paused;
+            if (unlocked) log('[SnowballBlitz] bgm unlocked', { track: a.currentSrc || a.src });
+        } catch {
+            // ignore
+        }
+    };
+
+    const stop = () => {
+        if (!audio) return;
+        try { audio.pause(); } catch {}
+        try { audio.currentTime = 0; } catch {}
+    };
+
+    return {
+        unlock,
+        stop,
+        setEnabled,
+        setVolume,
+        get enabled() { return enabled; },
+        get volume() { return volume; },
+        get currentTrack() { return audio ? (audio.currentSrc || audio.src) : null; },
+    };
+}
+

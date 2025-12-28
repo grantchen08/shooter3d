@@ -6,7 +6,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import WebGL from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/capabilities/WebGL.js';
 import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
-import { createSfx } from './audio.js';
+import { createBgm, createSfx } from './audio.js';
 import { createUI } from './ui.js';
 import { createTuningPanel } from './tuning.js';
 
@@ -85,6 +85,12 @@ let trajectoryMaxPoints = 80;
 
 // Audio SFX (asset-free)
 const sfx = createSfx({ masterVolume: 0.55, debug: (m, d) => debugLog(m, d) });
+const bgm = createBgm({
+    volume: 0.22,
+    tracks: ['assets/music/bgm01.mp3', 'assets/music/bgm02.mp3'],
+    shuffle: true,
+    debug: (m, d) => debugLog(m, d),
+});
 
 // UI/HUD
 const ui = createUI({ debug: (m, d) => debugLog(m, d) });
@@ -914,6 +920,7 @@ function setupFireButton() {
         event.preventDefault();
         event.stopPropagation();
         sfx.unlock();
+        bgm.unlock();
         button.classList.add('pressed');
         debugLog('[SnowballBlitz] fire button -> fireProjectile()');
         fireProjectile();
@@ -962,6 +969,7 @@ function setupFireInputHandlers() {
     // Keyboard: Space fires a projectile (desktop-friendly for now)
     document.addEventListener('keydown', (event) => {
         sfx.unlock();
+        bgm.unlock();
 
         // QoL: restart hotkey
         if (!event.repeat && event.code === 'KeyR') {
@@ -1211,6 +1219,7 @@ function updateProjectiles(dt) {
 
 function onMouseDown(event) {
     sfx.unlock();
+    bgm.unlock();
     isDragging = true;
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
@@ -1242,6 +1251,7 @@ function onMouseUp(event) {
 function onTouchStart(event) {
     if (event.touches.length === 1) {
         sfx.unlock();
+        bgm.unlock();
         isDragging = true;
         lastTouchX = event.touches[0].clientX;
         lastTouchY = event.touches[0].clientY;

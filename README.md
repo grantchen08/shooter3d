@@ -74,6 +74,7 @@ Gameplay tuning lives in `docs/config/game.json`:
 - **Debug mode**: open the game with `?debug=1` to enable extra logs and the on-screen debug line.
 - **Debug tuning panel** (only in `?debug=1`): live-edit projectile speed, gravity, camera (height/distance/pitch), and target min/max distance, then use **Copy JSON** / **Download game.json** to export the current values. Values are saved in your browser via `localStorage`.
 - **Audio**: browsers require a user gesture to start WebAudio; sound effects will begin after your first interaction (tap/click/drag/key press).
+- **BGM**: background music tracks live in `docs/assets/music/` and will start after your first interaction as well.
 - **WebGL issues**:
   - Chrome/Chromium: check `chrome://gpu` and ensure hardware acceleration is enabled
   - Try Firefox if Chromium fails to create a WebGL context on Linux
