@@ -290,7 +290,9 @@ export function createBgm({
 
     const setVolume = (v) => {
         volume = clamp(Number(v), 0, 1);
-        if (audio) audio.volume = volume;
+        // Ensure the element exists so volume updates always apply (helps on iOS).
+        const a = ensureAudio();
+        if (a) a.volume = volume;
     };
 
     const setEnabled = (on) => {
