@@ -1,27 +1,27 @@
 {
   "projectile": {
-    "initialSpeed": 60
+    "initialSpeed": 50
   },
   "physics": {
     "gravity": {
       "x": 0,
-      "y": -120,
+      "y": -100,
       "z": 0
     }
   },
   "camera": {
-    "distance": 2.9,
-    "height": 1.4,
-    "orbitPitchDeg": 6
+    "distance": 2.4,
+    "height": 2.5,
+    "orbitPitchDeg": 0
   },
   "player": {
-    "height": 2
+    "height": 1
   },
   "snowman": {
-    "height": 1.2
+    "height": 1
   },
   "targets": {
-    "minDistance": 5.2,
-    "maxDistance": 12.8
+    "minDistance": 4,
+    "maxDistance": 11
   }
 }
