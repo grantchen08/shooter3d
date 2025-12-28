@@ -33,6 +33,15 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
         return audioCtx;
     };
 
+    const setEnabled = (on) => {
+        enabled = !!on;
+    };
+
+    const setMasterVolume = (v) => {
+        masterVolume = clamp(Number(v), 0, 1);
+        if (audioMasterGain) audioMasterGain.gain.value = masterVolume;
+    };
+
     const makeSfxOut = (worldPos) => {
         // Optional stereo panning (cheap spatial cue).
         const ctx = getAudioContext();
@@ -185,6 +194,10 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
         unlock,
         playShoot,
         playExplosion,
+        setEnabled,
+        setMasterVolume,
+        get enabled() { return enabled; },
+        get masterVolume() { return masterVolume; },
     };
 }
 

@@ -489,6 +489,7 @@ async function init() {
     // Fire button UI (desktop + mobile)
     setupFireButton();
     setupFullscreenButton();
+    setupAudioMuteButtons();
 
     debugLog('[SnowballBlitz] init() complete');
     
@@ -1099,6 +1100,81 @@ function setupFullscreenButton() {
     }, { capture: true });
 
     sync();
+}
+
+function setupAudioMuteButtons() {
+    const btnMusic = document.getElementById('music-mute-button');
+    const btnSfx = document.getElementById('sfx-mute-button');
+    if (!btnMusic || !btnSfx) return;
+
+    const key = 'snowballblitz:audioPrefs';
+    const load = () => {
+        try {
+            const raw = localStorage.getItem(key);
+            if (!raw) return { musicMuted: false, sfxMuted: false };
+            const parsed = JSON.parse(raw);
+            return {
+                musicMuted: !!parsed.musicMuted,
+                sfxMuted: !!parsed.sfxMuted,
+            };
+        } catch {
+            return { musicMuted: false, sfxMuted: false };
+        }
+    };
+    const save = (prefs) => {
+        try {
+            localStorage.setItem(key, JSON.stringify(prefs));
+        } catch {
+            // ignore
+        }
+    };
+
+    let prefs = load();
+
+    const apply = () => {
+        // BGM
+        try { bgm.setEnabled(!prefs.musicMuted); } catch {}
+
+        // SFX (WebAudio)
+        try { sfx.setEnabled(!prefs.sfxMuted); } catch {}
+
+        btnMusic.classList.toggle('muted', prefs.musicMuted);
+        btnMusic.setAttribute('aria-pressed', prefs.musicMuted ? 'true' : 'false');
+        btnMusic.title = prefs.musicMuted ? 'Music: muted' : 'Music: on';
+
+        btnSfx.classList.toggle('muted', prefs.sfxMuted);
+        btnSfx.setAttribute('aria-pressed', prefs.sfxMuted ? 'true' : 'false');
+        btnSfx.title = prefs.sfxMuted ? 'SFX: muted' : 'SFX: on';
+    };
+
+    const toggleMusic = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        prefs.musicMuted = !prefs.musicMuted;
+        save(prefs);
+        apply();
+        // If unmuting, try to start music from this gesture.
+        if (!prefs.musicMuted) {
+            try { bgm.unlock(); } catch {}
+        }
+    };
+
+    const toggleSfx = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        prefs.sfxMuted = !prefs.sfxMuted;
+        save(prefs);
+        apply();
+        // If unmuting, try to unlock WebAudio from this gesture.
+        if (!prefs.sfxMuted) {
+            try { sfx.unlock(); } catch {}
+        }
+    };
+
+    btnMusic.addEventListener('click', toggleMusic);
+    btnSfx.addEventListener('click', toggleSfx);
+
+    apply();
 }
 
 function setupTrajectoryLine() {

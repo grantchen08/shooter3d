@@ -164,6 +164,55 @@ html, body {
     transform: none;
 }
 
+#music-mute-button,
+#sfx-mute-button {
+    position: absolute;
+    right: max(12px, env(safe-area-inset-right));
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-weight: 900;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 60;
+    pointer-events: auto;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+}
+
+#music-mute-button {
+    top: calc(max(12px, env(safe-area-inset-top)) + 52px);
+}
+
+#sfx-mute-button {
+    top: calc(max(12px, env(safe-area-inset-top)) + 104px);
+}
+
+#music-mute-button:active,
+#sfx-mute-button:active,
+#music-mute-button.pressed,
+#sfx-mute-button.pressed {
+    transform: scale(0.96);
+    background: rgba(0, 0, 0, 0.6);
+}
+
+#music-mute-button.muted,
+#sfx-mute-button.muted {
+    opacity: 0.65;
+    border-color: rgba(255, 59, 48, 0.45);
+}
+
+#music-mute-button:focus-visible,
+#sfx-mute-button:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.9);
+    outline-offset: 3px;
+}
+
 .end-overlay {
     position: absolute;
     inset: 0;
