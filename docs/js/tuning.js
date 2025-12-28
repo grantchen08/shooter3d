@@ -26,6 +26,13 @@ function clampNumber(n, { min = -Infinity, max = Infinity } = {}) {
 }
 
 function toNumber(value, fallback) {
+    // iOS numeric keyboards and some locales use ',' as the decimal separator.
+    // Accept both "0.12" and "0,12" (and trim whitespace).
+    if (typeof value === 'string') {
+        const normalized = value.trim().replace(',', '.');
+        const n = Number(normalized);
+        return Number.isFinite(n) ? n : fallback;
+    }
     const n = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(n) ? n : fallback;
 }
@@ -316,11 +323,11 @@ export function createTuningPanel({
         <h3 class="section-title">Audio</h3>
         <div class="row">
           <label for="tune-bgm-vol">BGM volume</label>
-          <input id="tune-bgm-vol" type="number" step="0.01" min="0" max="1" />
+          <input id="tune-bgm-vol" type="text" inputmode="decimal" autocomplete="off" />
         </div>
         <div class="row">
           <label for="tune-sfx-vol">SFX volume</label>
-          <input id="tune-sfx-vol" type="number" step="0.01" min="0" max="1" />
+          <input id="tune-sfx-vol" type="text" inputmode="decimal" autocomplete="off" />
         </div>
 
         <h3 class="section-title">Sizes</h3>
