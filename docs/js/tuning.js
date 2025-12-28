@@ -317,6 +317,16 @@ export function createTuningPanel({
           <input id="tune-snowman-height" type="number" step="0.1" min="0.1" />
         </div>
 
+        <h3 class="section-title">Trajectory</h3>
+        <div class="row">
+          <label for="tune-traj-seg">Segment length</label>
+          <input id="tune-traj-seg" type="number" step="0.01" min="0.05" />
+        </div>
+        <div class="row">
+          <label for="tune-traj-maxpts">Max points</label>
+          <input id="tune-traj-maxpts" type="number" step="1" min="4" />
+        </div>
+
         <div class="btns">
           <button type="button" id="tune-copy">Copy JSON</button>
           <button type="button" id="tune-download" class="secondary">Download game.json</button>
@@ -343,6 +353,8 @@ export function createTuningPanel({
     const elTargetMax = panel.querySelector('#tune-target-max');
     const elPlayerHeight = panel.querySelector('#tune-player-height');
     const elSnowmanHeight = panel.querySelector('#tune-snowman-height');
+    const elTrajSeg = panel.querySelector('#tune-traj-seg');
+    const elTrajMaxPts = panel.querySelector('#tune-traj-maxpts');
     const elJson = panel.querySelector('#tune-json');
     const elStatus = panel.querySelector('#tune-status');
 
@@ -364,6 +376,8 @@ export function createTuningPanel({
 
         const playerH = clampNumber(toNumber(elPlayerHeight.value, defaultConfig?.player?.height ?? 2), { min: 0.1 });
         const snowmanH = clampNumber(toNumber(elSnowmanHeight.value, defaultConfig?.snowman?.height ?? 1.2), { min: 0.1 });
+        const trajSeg = clampNumber(toNumber(elTrajSeg.value, defaultConfig?.trajectory?.segmentLength ?? 0.35), { min: 0.05 });
+        const trajMaxPts = clampNumber(toNumber(elTrajMaxPts.value, defaultConfig?.trajectory?.maxPoints ?? 80), { min: 4 });
 
         return {
             projectile: { initialSpeed: speed },
@@ -372,6 +386,7 @@ export function createTuningPanel({
             targets: { minDistance: minD, maxDistance: maxD },
             player: { height: playerH },
             snowman: { height: snowmanH },
+            trajectory: { segmentLength: trajSeg, maxPoints: Math.floor(trajMaxPts) },
         };
     };
 
@@ -382,6 +397,7 @@ export function createTuningPanel({
         const tgt = cfg?.targets ?? { minDistance: 10, maxDistance: 26 };
         const playerCfg = cfg?.player ?? { height: 2 };
         const snowmanCfg = cfg?.snowman ?? { height: 1.2 };
+        const trajCfg = cfg?.trajectory ?? { segmentLength: 0.35, maxPoints: 80 };
         elSpeed.value = String(speed);
         elGx.value = String(g.x ?? 0);
         elGy.value = String(g.y ?? -9.8);
@@ -393,6 +409,8 @@ export function createTuningPanel({
         elTargetMax.value = String(tgt.maxDistance ?? 26);
         elPlayerHeight.value = String(playerCfg.height ?? 2);
         elSnowmanHeight.value = String(snowmanCfg.height ?? 1.2);
+        elTrajSeg.value = String(trajCfg.segmentLength ?? 0.35);
+        elTrajMaxPts.value = String(trajCfg.maxPoints ?? 80);
 
         elJson.value = prettyJSON(cfg);
     };
@@ -490,6 +508,8 @@ export function createTuningPanel({
     elTargetMax.addEventListener('input', scheduleApply);
     elPlayerHeight.addEventListener('input', scheduleApply);
     elSnowmanHeight.addEventListener('input', scheduleApply);
+    elTrajSeg.addEventListener('input', scheduleApply);
+    elTrajMaxPts.addEventListener('input', scheduleApply);
 
     const toggleCollapsed = () => {
         panel.classList.toggle('collapsed');

@@ -20,6 +20,10 @@
   "snowman": {
     "height": 1
   },
+  "trajectory": {
+    "segmentLength": 0.25,
+    "maxPoints": 100
+  },
   "targets": {
     "minDistance": 4,
     "maxDistance": 11

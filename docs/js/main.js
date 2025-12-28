@@ -79,8 +79,9 @@ const projectilesToRemove = new Set(); // body.id values
 // Trajectory visualization
 let trajectoryLine = null;
 const trajectoryPoints = []; // array of THREE.Vector3 reused each update
-const trajectoryMaxTimeSec = 3.0;
-const trajectoryTimeStepSec = 0.08;
+let trajectoryMaxTimeSec = 3.0;
+let trajectorySegmentLength = 0.35; // desired spacing between arc points (world units)
+let trajectoryMaxPoints = 80;
 
 // Audio SFX (asset-free)
 const sfx = createSfx({ masterVolume: 0.55, debug: (m, d) => debugLog(m, d) });
@@ -95,6 +96,7 @@ const DEFAULT_GAME_CONFIG = {
     camera: { distance: 8, height: 3, orbitPitchDeg: 18 },
     player: { height: 2.0 },
     snowman: { height: 1.2 },
+    trajectory: { maxTimeSec: 3.0, segmentLength: 0.35, maxPoints: 80 },
     targets: { minDistance: 10, maxDistance: 26 },
 };
 let gameConfig = DEFAULT_GAME_CONFIG;
@@ -173,6 +175,14 @@ function applyGameConfig(cfg) {
         gravity = new CANNON.Vec3(gx, gy, gz);
     }
 
+    // Trajectory sampling quality (adaptive step based on desired segment length)
+    const tMax = next?.trajectory?.maxTimeSec;
+    const segLen = next?.trajectory?.segmentLength;
+    const maxPts = next?.trajectory?.maxPoints;
+    if (isFiniteNumber(tMax) && tMax > 0) trajectoryMaxTimeSec = tMax;
+    if (isFiniteNumber(segLen) && segLen > 0) trajectorySegmentLength = segLen;
+    if (isFiniteNumber(maxPts) && maxPts >= 4) trajectoryMaxPoints = Math.floor(maxPts);
+
     // Player height (visual)
     const nextPlayerH = next?.player?.height;
     if (isFiniteNumber(nextPlayerH) && nextPlayerH > 0) {
@@ -248,6 +258,11 @@ function applyGameConfig(cfg) {
         },
         player: { height: playerHeight },
         snowman: { height: snowmanHeight },
+        trajectory: {
+            maxTimeSec: trajectoryMaxTimeSec,
+            segmentLength: trajectorySegmentLength,
+            maxPoints: trajectoryMaxPoints,
+        },
         targets: { minDistance: targetMinDistance, maxDistance: targetMaxDistance },
     });
 }
@@ -263,6 +278,11 @@ function getLiveGameConfig() {
         },
         player: { height: playerHeight },
         snowman: { height: snowmanHeight },
+        trajectory: {
+            maxTimeSec: trajectoryMaxTimeSec,
+            segmentLength: trajectorySegmentLength,
+            maxPoints: trajectoryMaxPoints,
+        },
         targets: { minDistance: targetMinDistance, maxDistance: targetMaxDistance },
     };
 }
@@ -1024,7 +1044,20 @@ function updateTrajectoryLine() {
     trajectoryPoints.length = 0;
     trajectoryPoints.push(p0.clone());
 
-    for (let t = trajectoryTimeStepSec; t <= trajectoryMaxTimeSec; t += trajectoryTimeStepSec) {
+    // Adaptive time step: choose dt so spatial distance between samples is ~trajectorySegmentLength.
+    // This keeps the curve smooth across different projectile speeds/gravity.
+    const maxT = Math.max(0.05, trajectoryMaxTimeSec);
+    const desiredSeg = Math.max(0.05, trajectorySegmentLength);
+    const maxPts = Math.max(4, trajectoryMaxPoints | 0);
+
+    let t = 0;
+    for (let i = 1; i < maxPts && t < maxT; i++) {
+        // Approx current speed magnitude under constant acceleration.
+        const vt = v0.clone().add(g.clone().multiplyScalar(t));
+        const speedNow = Math.max(0.001, vt.length());
+        const dt = clampNumber(desiredSeg / speedNow, { min: 0.01, max: 0.12 });
+        t += dt;
+
         const pt = p0
             .clone()
             .add(v0.clone().multiplyScalar(t))

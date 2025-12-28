@@ -63,6 +63,8 @@ Gameplay tuning lives in `docs/config/game.json`:
 - `camera.orbitPitchDeg`: camera orbit pitch in **degrees**
 - `player.height`: shooter (player) height (visual)
 - `snowman.height`: target snowman height (visual + collider)
+- `trajectory.segmentLength`: spacing between predicted-arc points (smaller = smoother)
+- `trajectory.maxPoints`: max number of points used to draw the arc
 - `targets.minDistance`: nearest target/platform distance from shooter
 - `targets.maxDistance`: farthest target/platform distance from shooter
 
