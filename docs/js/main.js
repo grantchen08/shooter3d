@@ -79,6 +79,7 @@ const projectilesToRemove = new Set(); // body.id values
 
 // Trajectory visualization
 let trajectoryLine = null;
+let trajectoryReticle = null;
 const trajectoryPoints = []; // array of THREE.Vector3 reused each update
 let trajectoryMaxTimeSec = 3.0;
 let trajectorySegmentLength = 0.35; // desired spacing between arc points (world units)
@@ -473,6 +474,7 @@ async function init() {
 
     // Trajectory line
     setupTrajectoryLine();
+    setupTrajectoryReticle();
 
     // HUD + overlay
     ui.init({ timeLimitSec: TIME_LIMIT_SEC, onRestart: resetGame });
@@ -1200,6 +1202,23 @@ function setupAudioMuteButtons() {
     apply();
 }
 
+function setupTrajectoryReticle() {
+    const geometry = new THREE.SphereGeometry(0.2, 16, 16);
+    const material = new THREE.MeshBasicMaterial({
+        color: 0xffaa00,
+        transparent: true,
+        opacity: 0.8,
+    });
+    trajectoryReticle = new THREE.Mesh(geometry, material);
+    trajectoryReticle.visible = false;
+    
+    // Add a light for "shining" effect
+    const light = new THREE.PointLight(0xffaa00, 3, 5);
+    trajectoryReticle.add(light);
+    
+    scene.add(trajectoryReticle);
+}
+
 function setupTrajectoryLine() {
     const material = new THREE.LineDashedMaterial({
         color: 0xffffff,
@@ -1305,19 +1324,20 @@ function updateTrajectoryLine() {
     const v0 = dir.clone().multiplyScalar(projectileSpeed);
     const g = new THREE.Vector3(gravity.x, gravity.y, gravity.z);
 
-    // Build points until we hit the ground (y <= projectileRadius) or max time
+    // Build points until we hit something or max time
     trajectoryPoints.length = 0;
     trajectoryPoints.push(p0.clone());
 
-    // Adaptive time step: choose dt so spatial distance between samples is ~trajectorySegmentLength.
-    // This keeps the curve smooth across different projectile speeds/gravity.
+    // Adaptive time step
     const maxT = Math.max(0.05, trajectoryMaxTimeSec);
     const desiredSeg = Math.max(0.05, trajectorySegmentLength);
     const maxPts = Math.max(4, trajectoryMaxPoints | 0);
 
     let t = 0;
+    let hitPoint = null;
+
     for (let i = 1; i < maxPts && t < maxT; i++) {
-        // Approx current speed magnitude under constant acceleration.
+        // Approx current speed magnitude
         const vt = v0.clone().add(g.clone().multiplyScalar(t));
         const speedNow = Math.max(0.001, vt.length());
         const dt = clampNumber(desiredSeg / speedNow, { min: 0.01, max: 0.12 });
@@ -1328,8 +1348,59 @@ function updateTrajectoryLine() {
             .add(v0.clone().multiplyScalar(t))
             .add(g.clone().multiplyScalar(0.5 * t * t));
 
+        // COLLISION CHECKS (Visual only)
+        
+        // 1. Ground (y <= projectileRadius)
+        // Use a slightly larger radius for visual feedback so it sits on top
+        if (pt.y <= projectileRadius) {
+            hitPoint = pt;
+            // Snap to ground y
+            hitPoint.y = projectileRadius; 
+            break;
+        }
+
+        // 2. Targets (Spheres)
+        let hitTarget = false;
+        for (const target of targets) {
+            if (!target.alive) continue;
+            // Target body position (center of sphere)
+            const bPos = target.body.position;
+            const r = target.body.shapes[0].radius;
+            // Check distance squared
+            const dx = pt.x - bPos.x;
+            const dy = pt.y - bPos.y;
+            const dz = pt.z - bPos.z;
+            const distSq = dx * dx + dy * dy + dz * dz;
+            const hitR = r + projectileRadius;
+            if (distSq <= hitR * hitR) {
+                hitTarget = true;
+                break;
+            }
+        }
+        if (hitTarget) {
+            hitPoint = pt;
+            break;
+        }
+
+        // 3. Platforms (Boxes)
+        let hitPlatform = false;
+        for (const plat of platforms) {
+            const pos = plat.body.position;
+            const he = plat.body.shapes[0].halfExtents; // half-extents
+            // AABB check with padding for projectile radius
+            if (Math.abs(pt.x - pos.x) <= he.x + projectileRadius &&
+                Math.abs(pt.y - pos.y) <= he.y + projectileRadius &&
+                Math.abs(pt.z - pos.z) <= he.z + projectileRadius) {
+                hitPlatform = true;
+                break;
+            }
+        }
+        if (hitPlatform) {
+            hitPoint = pt;
+            break;
+        }
+
         trajectoryPoints.push(pt);
-        if (pt.y <= projectileRadius * 0.5) break;
     }
 
     // Update geometry positions
@@ -1352,6 +1423,16 @@ function updateTrajectoryLine() {
 
     // Required for dashed lines
     trajectoryLine.computeLineDistances();
+
+    // Update Reticle
+    if (trajectoryReticle) {
+        if (hitPoint) {
+            trajectoryReticle.position.copy(hitPoint);
+            trajectoryReticle.visible = true;
+        } else {
+            trajectoryReticle.visible = false;
+        }
+    }
 }
 
 function setupInputHandlers() {
