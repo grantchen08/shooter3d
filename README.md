@@ -80,7 +80,9 @@ Gameplay tuning lives in `docs/config/game.json`:
 - **BGM**: background music tracks live in `docs/assets/music/` and will start after your first interaction as well.
 - **Mute**: use the on-screen **M** (music) and **SFX** buttons to mute/unmute.
 - **iPhone tip**: if you hear BGM but not SFX, check the **silent switch / ringer mode** (iOS can mute WebAudio sound effects depending on device settings).
-- **WebGL issues**:
+- **Targeting**: The trajectory line now shows a glowing ball where the projectile will hit the ground or targets.
+
+## WebGL issues
   - Chrome/Chromium: check `chrome://gpu` and ensure hardware acceleration is enabled
   - Try Firefox if Chromium fails to create a WebGL context on Linux
 
