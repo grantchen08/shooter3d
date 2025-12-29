@@ -9,7 +9,7 @@ import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
 import { createBgm, createSfx } from './audio.js';
 import { createUI } from './ui.js';
 import { createTuningPanel } from './tuning.js';
-import { VERSION } from './version.js?v=0.1.3';
+import { VERSION } from './version.js?v=0.1.5';
 
 // Scene setup
 let scene, camera, renderer;
