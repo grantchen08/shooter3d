@@ -232,6 +232,9 @@ export function createSfx({ enabled = true, masterVolume = 0.55, debug = null } 
  * Why HTMLAudio (vs WebAudio):
  * - Simple, robust for streaming mp3
  * - Still respects autoplay restrictions (must call unlock() from a gesture)
+ *
+ * Update: On iOS, HTMLAudioElement.volume is read-only (1.0).
+ * To support volume control, we route audio through a Web Audio GainNode if possible.
  */
 export function createBgm({
     enabled = true,
@@ -255,10 +258,27 @@ export function createBgm({
     let unlocked = false;
     let idx = 0;
 
+    // Web Audio vars for iOS volume control
+    let audioCtx = null;
+    let gainNode = null;
+    let sourceNode = null;
+
     const pickStartIndex = () => {
         if (!list.length) return 0;
         if (!shuffle) return 0;
         return Math.floor(Math.random() * list.length);
+    };
+
+    const getAudioContext = () => {
+        if (audioCtx) return audioCtx;
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+
+        audioCtx = new Ctx();
+        gainNode = audioCtx.createGain();
+        gainNode.gain.value = volume;
+        gainNode.connect(audioCtx.destination);
+        return audioCtx;
     };
 
     const ensureAudio = () => {
@@ -269,7 +289,22 @@ export function createBgm({
         audio = new Audio(list[idx]);
         audio.preload = 'auto';
         audio.loop = false; // we handle looping/playlist manually
-        audio.volume = clamp(volume, 0, 1);
+
+        // iOS Volume workaround: Route through Web Audio GainNode
+        try {
+            const ctx = getAudioContext();
+            if (ctx) {
+                sourceNode = ctx.createMediaElementSource(audio);
+                sourceNode.connect(gainNode);
+                // When routed, the element volume acts as input gain. Keep it full.
+                audio.volume = 1.0;
+            } else {
+                audio.volume = clamp(volume, 0, 1);
+            }
+        } catch (e) {
+            log('[SnowballBlitz] bgm: Web Audio route failed, falling back to element volume', e);
+            audio.volume = clamp(volume, 0, 1);
+        }
 
         audio.addEventListener('ended', () => {
             // Advance playlist
@@ -290,9 +325,21 @@ export function createBgm({
 
     const setVolume = (v) => {
         volume = clamp(Number(v), 0, 1);
-        // Ensure the element exists so volume updates always apply (helps on iOS).
-        const a = ensureAudio();
-        if (a) a.volume = volume;
+        
+        // Update GainNode (primary volume control on iOS)
+        if (gainNode) {
+            gainNode.gain.value = volume;
+        }
+
+        // Update Element
+        // If routed, keep element at 1.0. If not routed (fallback), update element.
+        if (audio) {
+            if (sourceNode) {
+                audio.volume = 1.0;
+            } else {
+                audio.volume = volume;
+            }
+        }
     };
 
     const setEnabled = (on) => {
@@ -307,6 +354,11 @@ export function createBgm({
     };
 
     const unlock = async () => {
+        // Resume Web Audio context if exists (crucial for iOS)
+        if (audioCtx && audioCtx.state !== 'running') {
+            try { await audioCtx.resume(); } catch {}
+        }
+
         if (!enabled || unlocked) return;
         const a = ensureAudio();
         if (!a) return;
@@ -336,4 +388,3 @@ export function createBgm({
         get currentTrack() { return audio ? (audio.currentSrc || audio.src) : null; },
     };
 }
-
