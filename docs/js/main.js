@@ -1283,11 +1283,13 @@ function onWindowResize() {
 }
 
 function updateCameraPosition() {
-    // Vector from player -> camera (fixed orbit direction)
+    // Vector from player -> camera (orbits with aimYaw)
+    // We replace cameraOrbitYaw with aimYaw to lock the camera to the gun's horizontal direction.
+    const yaw = aimYaw;
     const toCamera = new THREE.Vector3(
-        Math.sin(cameraOrbitYaw) * Math.cos(cameraOrbitPitch),
+        Math.sin(yaw) * Math.cos(cameraOrbitPitch),
         Math.sin(cameraOrbitPitch),
-        Math.cos(cameraOrbitYaw) * Math.cos(cameraOrbitPitch)
+        Math.cos(yaw) * Math.cos(cameraOrbitPitch)
     ).normalize();
 
     // Place camera at a fixed offset from the player (plus height)
@@ -1753,6 +1755,9 @@ function animate() {
 
     // Sync physics -> visuals
     updateProjectiles(dt);
+
+    // Update camera to follow aim
+    updateCameraPosition();
 
     // Update predicted trajectory each frame (cheap at these point counts)
     updateTrajectoryLine();

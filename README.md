@@ -82,6 +82,7 @@ Gameplay tuning lives in `docs/config/game.json`:
 - **iPhone tip**: if you hear BGM but not SFX, check the **silent switch / ringer mode** (iOS can mute WebAudio sound effects depending on device settings).
 - **Targeting**: The trajectory line now shows a glowing ball where the projectile will hit the ground or targets.
 - **Visuals**: Projectiles now have a trailing effect, and the trajectory line is thicker for better visibility.
+- **Camera**: The camera now rotates with the player's aim, keeping the "gun" centered horizontally while aiming.
 
 ## WebGL issues
   - Chrome/Chromium: check `chrome://gpu` and ensure hardware acceleration is enabled
