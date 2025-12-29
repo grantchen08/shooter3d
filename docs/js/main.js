@@ -9,7 +9,7 @@ import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
 import { createBgm, createSfx } from './audio.js';
 import { createUI } from './ui.js';
 import { createTuningPanel } from './tuning.js';
-import { VERSION } from './version.js?v=0.1.6';
+import { VERSION } from './version.js?v=0.1.7';
 
 // Scene setup
 let scene, camera, renderer;
@@ -43,10 +43,12 @@ let lastTouchY = 0;
 const rotationSpeed = 0.005; // Sensitivity for camera rotation
 
 // Projectiles
-const projectiles = []; // { mesh: THREE.Mesh, body: CANNON.Body, age: number }
+const projectiles = []; // { mesh: THREE.Mesh, body: CANNON.Body, age: number, trailPoints: THREE.Points, trailGeom: THREE.BufferGeometry, trailPositions: Float32Array, trailAge: Float32Array }
 const projectileRadius = 0.15;
 let projectileSpeed = 18; // configurable (see docs/config/game.json)
 const projectileMaxAgeSec = 8;
+const MAX_TRAIL_POINTS = 30; // Number of points in the trail
+const TRAIL_DURATION = 0.4; // Duration in seconds for trail particles to fade
 
 // Platforms & targets
 const platforms = []; // { mesh: THREE.Mesh, body: CANNON.Body }
@@ -1220,13 +1222,15 @@ function setupTrajectoryReticle() {
 }
 
 function setupTrajectoryLine() {
-    const material = new THREE.LineDashedMaterial({
+    // Increase linewidth (Note: WebGL linewidth is often limited to 1px on many browsers/drivers)
+    // To get truly thick lines, we'd need a ribbon/tube geometry or a dedicated line shader.
+    // For now, we'll keep using LineDashedMaterial but make it more opaque/visible.
+    // If "thick" is critical, we can use a TubeGeometry later.
+    const material = new THREE.LineBasicMaterial({
         color: 0xffffff,
-        dashSize: 0.25,
-        gapSize: 0.18,
-        linewidth: 1, // ignored on most platforms, but harmless
+        linewidth: 3, // Best effort (might stay 1px on Chrome/Windows)
         transparent: true,
-        opacity: 0.95,
+        opacity: 0.6,
     });
 
     // Initialize with a tiny geometry; we replace positions each update
@@ -1500,7 +1504,89 @@ function fireProjectile() {
     body.linearDamping = 0.01;
     world.addBody(body);
 
-    const rec = { mesh, body, age: 0 };
+    // Trail setup
+    const trailGeom = new THREE.BufferGeometry();
+    const trailPositions = new Float32Array(MAX_TRAIL_POINTS * 3);
+    // Initialize trail at spawn point to avoid jumps
+    for (let i = 0; i < MAX_TRAIL_POINTS; i++) {
+        trailPositions[i * 3 + 0] = spawnPos.x;
+        trailPositions[i * 3 + 1] = spawnPos.y;
+        trailPositions[i * 3 + 2] = spawnPos.z;
+    }
+    const trailAge = new Float32Array(MAX_TRAIL_POINTS); // 0..1 (0=fresh, 1=old)
+    // Initialize ages to be "old" so they don't show up immediately or fade out
+    for (let i = 0; i < MAX_TRAIL_POINTS; i++) trailAge[i] = 1.0;
+
+    trailGeom.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    trailGeom.setAttribute('age', new THREE.BufferAttribute(trailAge, 1));
+
+    // Custom shader for fading trail
+    // Simple point cloud trail
+    const trailMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.15,
+        transparent: true,
+        opacity: 0.6,
+        sizeAttenuation: true,
+        depthWrite: false,
+        vertexColors: true, // Enable vertex colors for fading
+    });
+
+    // Initialize colors (white with alpha would be ideal, but PointsMaterial uses vertex color rgb)
+    // We will simulate fade by darkening the color from white to black (invisible-ish on dark bg, but here sky is blue...)
+    // Actually, THREE.PointsMaterial doesn't support per-vertex alpha in the standard pipeline easily without custom shader.
+    // We'll switch to a custom ShaderMaterial for a nice trail effect.
+    
+    // Shader for trail: fade alpha based on age
+    const trailShaderMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            color: { value: new THREE.Color(0xffffff) },
+            size: { value: 6.0 * (window.devicePixelRatio || 1) }, // pixels
+        },
+        vertexShader: `
+            attribute float age;
+            varying float vAlpha;
+            uniform float size;
+            void main() {
+                vAlpha = 1.0 - age;
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                gl_PointSize = size * (10.0 / -mvPosition.z); // Size attenuation
+                gl_Position = projectionMatrix * mvPosition;
+            }
+        `,
+        fragmentShader: `
+            uniform vec3 color;
+            varying float vAlpha;
+            void main() {
+                if (vAlpha <= 0.0) discard;
+                // Circular soft particle
+                vec2 coord = gl_PointCoord - vec2(0.5);
+                float dist = length(coord);
+                if (dist > 0.5) discard;
+                
+                gl_FragColor = vec4(color, vAlpha * 0.6); // Base opacity 0.6
+            }
+        `,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+    });
+
+    const trailPoints = new THREE.Points(trailGeom, trailShaderMaterial);
+    trailPoints.frustumCulled = false;
+    scene.add(trailPoints);
+
+    const rec = { 
+        mesh, 
+        body, 
+        age: 0,
+        trailPoints,
+        trailGeom,
+        trailPositions,
+        trailAge,
+        lastTrailUpdate: 0,
+        trailIndex: 0
+    };
     projectiles.push(rec);
     projectileByBodyId.set(body.id, rec);
 
@@ -1516,6 +1602,11 @@ function removeProjectile(idx) {
     const p = projectiles[idx];
     if (!p) return;
     scene.remove(p.mesh);
+    if (p.trailPoints) {
+        scene.remove(p.trailPoints);
+        p.trailGeom.dispose();
+        p.trailPoints.material.dispose();
+    }
     world.removeBody(p.body);
     projectileByBodyId.delete(p.body.id);
     projectilesToRemove.delete(p.body.id);
@@ -1528,13 +1619,46 @@ function updateProjectiles(dt) {
         p.age += dt;
 
         // Sync mesh from physics body
-        p.mesh.position.set(p.body.position.x, p.body.position.y, p.body.position.z);
+        const pos = p.body.position;
+        p.mesh.position.set(pos.x, pos.y, pos.z);
         p.mesh.quaternion.set(
             p.body.quaternion.x,
             p.body.quaternion.y,
             p.body.quaternion.z,
             p.body.quaternion.w
         );
+
+        // Update trail
+        if (p.trailPoints) {
+            // Shift ages
+            const ages = p.trailAge;
+            const positions = p.trailPositions;
+            
+            // Age all existing points
+            for (let k = 0; k < MAX_TRAIL_POINTS; k++) {
+                ages[k] += dt / TRAIL_DURATION;
+            }
+
+            // Emit new point every frame (or throttle if needed)
+            // Use a circular buffer approach for visual simplicity
+            p.trailIndex = (p.trailIndex + 1) % MAX_TRAIL_POINTS;
+            const idx = p.trailIndex;
+            
+            positions[idx * 3 + 0] = pos.x;
+            positions[idx * 3 + 1] = pos.y;
+            positions[idx * 3 + 2] = pos.z;
+            ages[idx] = 0.0;
+
+            // Update attributes
+            p.trailGeom.attributes.position.needsUpdate = true;
+            p.trailGeom.attributes.age.needsUpdate = true;
+            
+            // To make points fade, we could use a custom shader.
+            // For standard PointsMaterial, we can't easily fade per-vertex alpha without a shader.
+            // Hack: just keep them visible and short-lived.
+            // Or better: Use vertex colors to fade opacity? (Requires vertexColors: true)
+            // Let's stick to simple "white dots following" for now, maybe shrink them in shader later.
+        }
 
         // Cleanup rules: lifetime or hit ground (y <= 0)
         if (p.age > projectileMaxAgeSec) {
