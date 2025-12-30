@@ -25,7 +25,8 @@ let cameraDistance = 8; // Distance from player
 let cameraHeight = 3; // Height offset from player
 
 // Camera orbit is fixed (3rd-person view). Drag/swipe controls AIM, not camera orbit.
-const cameraOrbitYaw = 0; // radians
+const DEFAULT_ORBIT_YAW = 30 * Math.PI / 180;
+let cameraOrbitYaw = DEFAULT_ORBIT_YAW; // radians
 let cameraOrbitPitch = Math.PI / 10; // radians; configurable via camera.orbitPitchDeg
 
 // Aim control variables (projectile orientation)
@@ -125,7 +126,7 @@ const ui = createUI({ debug: (m, d) => debugLog(m, d) });
 const DEFAULT_GAME_CONFIG = {
     projectile: { initialSpeed: 18 },
     physics: { gravity: { x: 0, y: -9.8, z: 0 } },
-    camera: { distance: 8, height: 3, orbitPitchDeg: 18 },
+    camera: { distance: 8, height: 3, orbitPitchDeg: 18, orbitYawDeg: 30 },
     audio: { bgmVolume: 0.12, sfxVolume: 0.55 },
     player: { height: 2.0 },
     snowman: { height: 1.2 },
@@ -247,10 +248,20 @@ function applyGameConfig(cfg) {
     const camDistance = next?.camera?.distance;
     const camHeight = next?.camera?.height;
     const camPitchDeg = next?.camera?.orbitPitchDeg;
+    const camYawDeg = next?.camera?.orbitYawDeg;
+
     if (isFiniteNumber(camDistance) && camDistance > 0) cameraDistance = camDistance;
     if (isFiniteNumber(camHeight)) cameraHeight = camHeight;
-    if (isFiniteNumber(camPitchDeg)) cameraOrbitPitch = toRadians(camPitchDeg);
-    cameraOrbitPitch = clampNumber(cameraOrbitPitch, { min: -Math.PI / 2 + 0.01, max: Math.PI / 2 - 0.01 });
+    
+    if (isFiniteNumber(camPitchDeg)) {
+        cameraOrbitPitch = toRadians(camPitchDeg);
+        cameraOrbitPitch = clampNumber(cameraOrbitPitch, { min: -Math.PI / 2 + 0.01, max: Math.PI / 2 - 0.01 });
+    }
+
+    if (isFiniteNumber(camYawDeg)) {
+        cameraOrbitYaw = toRadians(camYawDeg);
+    }
+    
     if (camera && player) updateCameraPosition();
 
     // Targets distance range (keeps target direction/layout pattern fixed)
@@ -291,13 +302,14 @@ function applyGameConfig(cfg) {
         world.gravity.set(gravity.x, gravity.y, gravity.z);
     }
 
-    debugLog('[SnowballBlitz] config applied', {
+        debugLog('[SnowballBlitz] config applied', {
         projectileSpeed,
         gravity: { x: gravity.x, y: gravity.y, z: gravity.z },
         camera: {
             distance: cameraDistance,
             height: cameraHeight,
             orbitPitchDeg: (cameraOrbitPitch * 180) / Math.PI,
+            orbitYawDeg: (cameraOrbitYaw * 180) / Math.PI,
         },
         audio: {
             bgmVolume: bgm.volume,
@@ -322,6 +334,7 @@ function getLiveGameConfig() {
             distance: cameraDistance,
             height: cameraHeight,
             orbitPitchDeg: Math.round(((cameraOrbitPitch * 180) / Math.PI) * 100) / 100,
+            orbitYawDeg: Math.round(((cameraOrbitYaw * 180) / Math.PI) * 100) / 100,
         },
         audio: {
             bgmVolume: Math.round(bgm.volume * 100) / 100,
@@ -1285,7 +1298,7 @@ function onWindowResize() {
 function updateCameraPosition() {
     // Vector from player -> camera (orbits with aimYaw)
     // We replace cameraOrbitYaw with aimYaw to lock the camera to the gun's horizontal direction.
-    const yaw = aimYaw;
+    const yaw = aimYaw + cameraOrbitYaw;
     const toCamera = new THREE.Vector3(
         Math.sin(yaw) * Math.cos(cameraOrbitPitch),
         Math.sin(cameraOrbitPitch),

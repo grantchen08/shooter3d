@@ -313,6 +313,10 @@ export function createTuningPanel({
           <label for="tune-cam-pitch">Orbit pitch (deg)</label>
           <input id="tune-cam-pitch" type="number" step="0.1" />
         </div>
+        <div class="row">
+          <label for="tune-cam-yaw">Orbit yaw (deg)</label>
+          <input id="tune-cam-yaw" type="number" step="0.1" />
+        </div>
 
         <h3 class="section-title">Targets</h3>
         <div class="grid2">
@@ -372,6 +376,7 @@ export function createTuningPanel({
     const elCamDistance = panel.querySelector('#tune-cam-distance');
     const elCamHeight = panel.querySelector('#tune-cam-height');
     const elCamPitch = panel.querySelector('#tune-cam-pitch');
+    const elCamYaw = panel.querySelector('#tune-cam-yaw');
     const elTargetMin = panel.querySelector('#tune-target-min');
     const elTargetMax = panel.querySelector('#tune-target-max');
     const elBgmVol = panel.querySelector('#tune-bgm-vol');
@@ -395,6 +400,7 @@ export function createTuningPanel({
         const camDistance = clampNumber(toNumber(elCamDistance.value, defaultConfig?.camera?.distance ?? 8), { min: 0.1 });
         const camHeight = toNumber(elCamHeight.value, defaultConfig?.camera?.height ?? 3);
         const camPitch = toNumber(elCamPitch.value, defaultConfig?.camera?.orbitPitchDeg ?? 18);
+        const camYaw = toNumber(elCamYaw.value, defaultConfig?.camera?.orbitYawDeg ?? 30);
 
         const minD = clampNumber(toNumber(elTargetMin.value, defaultConfig?.targets?.minDistance ?? 10), { min: 0.1 });
         const maxD = clampNumber(toNumber(elTargetMax.value, defaultConfig?.targets?.maxDistance ?? 26), { min: 0.1 });
@@ -410,7 +416,7 @@ export function createTuningPanel({
         return {
             projectile: { initialSpeed: speed },
             physics: { gravity: { x: gx, y: gy, z: gz } },
-            camera: { distance: camDistance, height: camHeight, orbitPitchDeg: camPitch },
+            camera: { distance: camDistance, height: camHeight, orbitPitchDeg: camPitch, orbitYawDeg: camYaw },
             targets: { minDistance: minD, maxDistance: maxD },
             audio: { bgmVolume: bgmVol, sfxVolume: sfxVol },
             player: { height: playerH },
@@ -430,7 +436,7 @@ export function createTuningPanel({
 
         const speed = cfg?.projectile?.initialSpeed ?? 18;
         const g = cfg?.physics?.gravity ?? { x: 0, y: -9.8, z: 0 };
-        const cam = cfg?.camera ?? { distance: 8, height: 3, orbitPitchDeg: 18 };
+        const cam = cfg?.camera ?? { distance: 8, height: 3, orbitPitchDeg: 18, orbitYawDeg: 30 };
         const tgt = cfg?.targets ?? { minDistance: 10, maxDistance: 26 };
         const aud = cfg?.audio ?? { bgmVolume: 0.12, sfxVolume: 0.55 };
         const playerCfg = cfg?.player ?? { height: 2 };
@@ -443,6 +449,7 @@ export function createTuningPanel({
         setIfNotFocused(elCamDistance, cam.distance ?? 8);
         setIfNotFocused(elCamHeight, cam.height ?? 3);
         setIfNotFocused(elCamPitch, cam.orbitPitchDeg ?? 18);
+        setIfNotFocused(elCamYaw, cam.orbitYawDeg ?? 30);
         setIfNotFocused(elTargetMin, tgt.minDistance ?? 10);
         setIfNotFocused(elTargetMax, tgt.maxDistance ?? 26);
         setIfNotFocused(elBgmVol, aud.bgmVolume ?? 0.12);
@@ -544,6 +551,7 @@ export function createTuningPanel({
     elCamDistance.addEventListener('input', scheduleApply);
     elCamHeight.addEventListener('input', scheduleApply);
     elCamPitch.addEventListener('input', scheduleApply);
+    elCamYaw.addEventListener('input', scheduleApply);
     elTargetMin.addEventListener('input', scheduleApply);
     elTargetMax.addEventListener('input', scheduleApply);
     elBgmVol.addEventListener('input', scheduleApply);

@@ -62,6 +62,7 @@ Gameplay tuning lives in `docs/config/game.json`:
 - `camera.distance`: camera distance from shooter
 - `camera.height`: camera height offset above shooter
 - `camera.orbitPitchDeg`: camera orbit pitch in **degrees**
+- `camera.orbitYawDeg`: camera orbit yaw offset in **degrees** (rotates the view relative to aim direction)
 - `audio.bgmVolume`: background music volume (0..1)
 - `audio.sfxVolume`: sound effects volume (0..1)
 - `player.height`: shooter (player) height (visual)
@@ -83,6 +84,7 @@ Gameplay tuning lives in `docs/config/game.json`:
 - **Targeting**: The trajectory line now shows a glowing ball where the projectile will hit the ground or targets.
 - **Visuals**: Projectiles now have a trailing effect, and the trajectory line is thicker for better visibility.
 - **Camera**: The camera now rotates with the player's aim, keeping the "gun" centered horizontally while aiming.
+- **Side View**: Added a configurable yaw offset (default 30°) to the camera so the player can see the projectile trajectory from the side.
 
 ## WebGL issues
   - Chrome/Chromium: check `chrome://gpu` and ensure hardware acceleration is enabled

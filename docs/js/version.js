@@ -1,4 +1,4 @@
-export const VERSION = '0.1.8';
+export const VERSION = '0.1.9';
 
 export const VERSION_PARTS = (() => {
   const [major, minor, patch] = VERSION.split('.').map((n) => Number(n));

@@ -12,7 +12,8 @@
   "camera": {
     "distance": 2.4,
     "height": 2.5,
-    "orbitPitchDeg": 0
+    "orbitPitchDeg": 0,
+    "orbitYawDeg": 30
   },
   "audio": {
     "bgmVolume": 0.01,
